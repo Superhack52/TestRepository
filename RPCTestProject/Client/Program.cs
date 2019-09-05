@@ -32,6 +32,14 @@
             var console = _wrap.GetType(typeStr);
             console.WriteLine("Hello from Client");
 
+            var str = string.Empty;
+            while (!str.ToLower().Equals("exit"))
+            {
+                Console.Write("Write text to server: ");
+                str = Console.ReadLine();
+                console.WriteLine(str);
+            }
+
             GC.Collect();
             GC.WaitForPendingFinalizers();
             Console.WriteLine("Press any key");
@@ -47,9 +55,8 @@
             // Если мы запустили процесс сервера
             // То выгрузим его
             if (loadLocalServer) connector.CloseServer();
-            Console.WriteLine("Press any key");
+
             Console.ReadKey();
-            //    server.Kill();
         }
 
         private static string GetParentDir(string dir, int levelUp)

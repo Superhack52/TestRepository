@@ -1,120 +1,104 @@
-﻿namespace Server
+﻿namespace NetObjectToNative
 {
-    using NetObjectToNative;
     using System;
+    using System.Linq;
     using System.Threading;
 
-    /// <summary>
-    /// Хранилище элементов
-    /// </summary>
-    internal class ObjectStorage
+    public struct StorageElem
     {
-        public ObjectStorage()
+        internal AutoWrap Wrap;
+        internal int Next;
+
+        internal StorageElem(AutoWrap wrap)
         {
-            _elements = new StorageElement[DefaultCountElements];
-            _arraySize = DefaultCountElements;
-            _firstDeleted = -1;
-            _sLock = new SpinLock();
+            Wrap = wrap;
+            Next = -1;
         }
 
-        internal int Add(AutoWrap @object)
+        internal StorageElem(AutoWrap wrap, int next)
         {
-            var element = new StorageElement(@object);
+            Wrap = wrap;
+            Next = next;
+        }
+    }
+
+    internal class ObjectStorage
+    {
+        private const int DefaultCountObjects = 64;
+        private StorageElem[] _elements = new StorageElem[DefaultCountObjects];
+        internal int ElementsCount = 0;
+        private int _arraySize = DefaultCountObjects;
+        internal int FirstDeleted = -1;
+        private static SpinLock _lockObject = new SpinLock();
+
+        public int Add(AutoWrap obj)
+        {
+            var element = new StorageElem(obj);
             var gotLock = false;
             try
             {
-                _sLock.Enter(ref gotLock);
+                _lockObject.Enter(ref gotLock);
 
-                if (_firstDeleted == -1) return AddInArray(element);
+                if (FirstDeleted == -1) return AddInArray(element);
                 else
                 {
-                    int newPosition = _firstDeleted;
-                    _firstDeleted = _elements[newPosition].Next;
-                    _elements[newPosition] = element;
-                    return newPosition;
+                    int newPos = FirstDeleted;
+                    FirstDeleted = _elements[newPos].Next;
+                    _elements[newPos] = element;
+                    return newPos;
                 }
             }
             finally
             {
-                if (gotLock) _sLock.Exit();
+                if (gotLock) _lockObject.Exit();
             }
         }
 
-        internal void RemoveKey(int position)
+        private int AddInArray(StorageElem element)
         {
-            if (position > 0 && position < _elements.Length && _elements[position].Object != null)
+            if (ElementsCount == _arraySize)
+            {
+                var temp = new StorageElem[_arraySize * 2];
+                Array.Copy(_elements, 0, temp, 0, _elements.Length);
+                _elements = temp;
+                _arraySize = _elements.Length;
+            }
+
+            _elements[ElementsCount] = element;
+            var res = ElementsCount;
+            ElementsCount++;
+            return res;
+        }
+
+        public void RemoveKey(int position)
+        {
+            if (position > 0 && position < _elements.Length && _elements[position].Wrap != null)
             {
                 var gotLock = false;
                 try
                 {
-                    _sLock.Enter(ref gotLock);
+                    _lockObject.Enter(ref gotLock);
 
-                    var element = new StorageElement(null, _firstDeleted);
+                    var element = new StorageElem(null, FirstDeleted);
                     _elements[position] = element;
-                    _firstDeleted = position;
+                    FirstDeleted = position;
                 }
                 finally
                 {
-                    if (gotLock) _sLock.Exit();
+                    if (gotLock) _lockObject.Exit();
                 }
             }
         }
 
-        internal AutoWrap GetValue(int position)
+        public AutoWrap GetValue(int position)
         {
             if (!(position > -1 && position < _elements.Length)) return null;
-            return _elements[position].Object;
+            return _elements[position].Wrap;
         }
 
-        internal int RealObjectCount()
+        public int RealObjectCount()
         {
-            var count = 0;
-            foreach (var element in _elements)
-                if (element.Object != null) count++;
-            return count;
-        }
-
-        private int AddInArray(StorageElement element)
-        {
-            if (_elementsCount == _arraySize)
-            {
-                _arraySize = _arraySize * 2;
-                var temp = new StorageElement[_arraySize];
-                Array.Copy(_elements, 0, temp, 0, _elements.Length);
-                _elements = temp;
-            }
-
-            _elements[_elementsCount] = element;
-            //todo проверить количество элементов (сначала нужно вернуть начальное значение, потом добавить + 1)
-            return _elementsCount++;
-        }
-
-        private const int DefaultCountElements = 64;
-        private StorageElement[] _elements;
-        private int _elementsCount;
-        private int _arraySize;
-        private int _firstDeleted;
-        private static SpinLock _sLock;
-    }
-
-    /// <summary>
-    /// Элемент в хранилище объектов
-    /// </summary>
-    internal struct StorageElement
-    {
-        internal AutoWrap Object;
-        internal int Next;
-
-        public StorageElement(AutoWrap @object)
-        {
-            Object = @object;
-            Next = -1;
-        }
-
-        public StorageElement(AutoWrap @object, int next)
-        {
-            Object = @object;
-            Next = next;
+            return _elements.Count(element => element.Wrap != null);
         }
     }
 }

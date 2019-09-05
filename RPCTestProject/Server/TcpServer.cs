@@ -148,7 +148,6 @@
                         case CallMethod.CallFuncAsync: CallAsyncFunc(br, bw, adress); break;
                         case CallMethod.CallDelegate: CallAsDelegate(br, bw); break;
                         case CallMethod.CallGenericFunc: CallAsGenericFunc(br, bw); break;
-                        case CallMethod.GetWrapperForObjectWithEvents: GetWrapperForObjectWithEvents(br, bw, adress); break;
                         case CallMethod.GetIndex: GetIndex(br, bw); break;
                         case CallMethod.SetIndex: SetIndex(br, bw); break;
                         case CallMethod.IteratorNext: IteratorNext(br, bw); break;
@@ -457,37 +456,37 @@
             WorkWithVariant.WriteObject(null, bw);
         }
 
-        public static void GetWrapperForObjectWithEvents(BinaryReader br, BinaryWriter bw, IPAddress address)
-        {
-            try
-            {
-                if (!GetAW(br, bw, out var autoWrap)) return;
+        //public static void GetWrapperForObjectWithEvents(BinaryReader br, BinaryWriter bw, IPAddress address)
+        //{
+        //    try
+        //    {
+        //        if (!GetAW(br, bw, out var autoWrap)) return;
 
-                Type type = autoWrap.Type;
-                Type genType = typeof(WrapperForEvents<>);
-                Type constructed = genType.MakeGenericType(type);
-                var propertyName = "WrapperCreator";
+        //        Type type = autoWrap.Type;
+        //        Type genType = typeof(WrapperForEvents<>);
+        //        Type constructed = genType.MakeGenericType(type);
+        //        var propertyName = "WrapperCreator";
 
-                var fi = constructed.GetField(propertyName);
-                Delegate func = (Delegate)fi.GetValue(null);
+        //        var fi = constructed.GetField(propertyName);
+        //        Delegate func = (Delegate)fi.GetValue(null);
 
-                //var mi = constructed.GetMethod("СоздатьОбертку");
-                // Delegate функция = (Delegate)mi.Invoke(null,null);
+        //        //var mi = constructed.GetMethod("СоздатьОбертку");
+        //        // Delegate функция = (Delegate)mi.Invoke(null,null);
 
-                var taskId = new Guid();
-                var port = br.ReadInt32();
+        //        var taskId = new Guid();
+        //        var port = br.ReadInt32();
 
-                var ac = new TcpAsyncCallBack(taskId, address, port);
-                var callBack = new Action<Guid, object>(ac.SendEvent);
+        //        var ac = new TcpAsyncCallBack(taskId, address, port);
+        //        var callBack = new Action<Guid, object>(ac.SendEvent);
 
-                bw.Write(true);
-                WorkWithVariant.WriteObject(AutoWrap.WrapObject(func.DynamicInvoke(callBack, autoWrap.Object)), bw);
-            }
-            catch (Exception e)
-            {
-                SetError(AutoWrap.GetExceptionString("Ошибка создания оберки событий", "", e), bw);
-            }
-        }
+        //        bw.Write(true);
+        //        WorkWithVariant.WriteObject(AutoWrap.WrapObject(func.DynamicInvoke(callBack, autoWrap.Object)), bw);
+        //    }
+        //    catch (Exception e)
+        //    {
+        //        SetError(AutoWrap.GetExceptionString("Ошибка создания оберки событий", "", e), bw);
+        //    }
+        //}
 
         public static void GetPropVal(BinaryReader br, BinaryWriter bw)
         {

@@ -16,7 +16,6 @@ internal class Program
 
         var server = new ServerRPC.TCPConnector();
         server.Open(port);
-        // Console.ReadLine();
         server.WaitIsRunning.Task.Wait();
     }
 }
