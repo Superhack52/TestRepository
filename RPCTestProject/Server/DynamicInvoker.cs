@@ -1,16 +1,14 @@
-﻿using System;
+﻿using Microsoft.CSharp.RuntimeBinder;
+using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
-using System.Linq.Expressions;
-using Microsoft.CSharp.RuntimeBinder;
-using System.Dynamic;
-using System.Runtime.CompilerServices;
-using System.Collections;
-using System.Reflection;
-using System.Net;
-
 
 namespace NetObjectToNative
 {
@@ -20,516 +18,380 @@ namespace NetObjectToNative
         {
             var targetParam = CSharpArgumentInfo.Create(CSharpArgumentInfoFlags.None, null);
             CSharpArgumentInfo[] parameterFlags = new CSharpArgumentInfo[args.Length + 1];
-            System.Linq.Expressions.Expression[] parameters = new System.Linq.Expressions.Expression[args.Length + 1];
+            Expression[] parameters = new Expression[args.Length + 1];
             parameterFlags[0] = targetParam;
-            parameters[0] = System.Linq.Expressions.Expression.Constant(target);
+            parameters[0] = Expression.Constant(target);
             for (int i = 0; i < args.Length; i++)
             {
                 parameterFlags[i + 1] = CSharpArgumentInfo.Create(CSharpArgumentInfoFlags.Constant | CSharpArgumentInfoFlags.UseCompileTimeType, null);
-                parameters[i + 1] = System.Linq.Expressions.Expression.Constant(args[i]);
+                parameters[i + 1] = Expression.Constant(args[i]);
             }
             var csb = Microsoft.CSharp.RuntimeBinder.Binder.InvokeMember(CSharpBinderFlags.None, methodName, null, typeof(DynamicInvoker), parameterFlags);
             var de = DynamicExpression.Dynamic(csb, typeof(object), parameters);
             LambdaExpression expr = System.Linq.Expressions.Expression.Lambda(de);
             return expr.Compile().DynamicInvoke();
-
         }
 
         public static object GetValue(object target, string name)
         {
-
             CallSite<Func<CallSite, object, object>> callSite = CallSite<Func<CallSite, object, object>>.Create(Microsoft.CSharp.RuntimeBinder.Binder.GetMember(CSharpBinderFlags.None, name, typeof(DynamicInvoker), new CSharpArgumentInfo[] { CSharpArgumentInfo.Create(CSharpArgumentInfoFlags.None, null) }));
 
             return callSite.Target(callSite, target);
         }
+
         public static void SetValue(object target, string name, object value)
         {
-
             CallSite<Func<CallSite, object, object, object>> callSite = CallSite<Func<CallSite, object, object, object>>.Create(Microsoft.CSharp.RuntimeBinder.Binder.SetMember(CSharpBinderFlags.None, name, typeof(DynamicInvoker), new CSharpArgumentInfo[] { CSharpArgumentInfo.Create(CSharpArgumentInfoFlags.None, null), CSharpArgumentInfo.Create(CSharpArgumentInfoFlags.UseCompileTimeType, null) }));
             callSite.Target(callSite, target, value);
         }
     }
 
-
-   public class ДженерикВыполнитель : DynamicObject
+    public class GenericExecutor : DynamicObject
     {
+        private AutoWrap _wrap;
+        private Type[] _arguments;
 
-        AutoWrap объект;
-        Type[] аргументы;
-
-        public ДженерикВыполнитель(AutoWrap объект,object[] Аргументы )
+        public GenericExecutor(AutoWrap wrap, object[] arguments)
         {
-            аргументы = new Type[Аргументы.Length];
+            _arguments = new Type[arguments.Length];
 
-            for (int i = 0; i < Аргументы.Length; i++)
-                аргументы[i] = NetObjectToNative.FindTypeForCreateObject(Аргументы[i]);
+            for (int i = 0; i < arguments.Length; i++)
+                _arguments[i] = NetObjectToNative.FindTypeForCreateObject(arguments[i]);
 
-            this.объект = объект;
-
-
+            _wrap = wrap;
         }
-        // вызов метода
 
-        public static bool НайтиИВыполнитьДженерикМетод(object obj, Type Тип, string ИмяМетода,bool IsStatic, Type[] Аргументы,Type[] ТипыПараметров, object[] параметры, out object result)
+        public static bool ExecuteGenericMethod(object obj, Type type, string methodName, bool isStatic, Type[] arguments, Type[] variableType, object[] parameters, out object result)
         {
             result = null;
 
-            var res = InformationOnTheTypes.FindGenericMethodsWithGenericArguments(Тип, IsStatic, ИмяМетода, Аргументы, ТипыПараметров);
+            var res = InformationOnTheTypes.FindGenericMethodsWithGenericArguments(type, isStatic, methodName, arguments, variableType);
 
-            if (res==null)  return false;
+            if (res == null) return false;
 
-         
-
-           
             try
             {
-                result = res.Invoke(obj, параметры);
+                result = res.Invoke(obj, parameters);
 
                 if (result != null && res.ReturnType.GetTypeInfo().IsInterface)
                     result = new AutoWrap(result, res.ReturnType);
-
             }
             catch (Exception)
             {
-               
-
                 return false;
-
             }
             return true;
         }
-        //public override bool TryInvokeMember(InvokeMemberBinder binder, object[] args, out object result)
-        //{
-        //    result = null;
-        //    var ИмяМетода = binder.Name;
-
-        //    var ТипыПараметров = ВсеМетодыПоИмени.ПолучитьТипыПараметров(args);
-
-        //    var res = ИнформацияПоТипам.НайтиДженерикМетод(объект.T, объект.ЭтоТип, ИмяМетода, аргументы, ТипыПараметров);
-
-
-        //    if (res == null)
-        //    {
-        //        AutoWrap.СообщитьОбОшибке("Не найден дженерик метод " + ИмяМетода);
-        //        return false;
-
-        //    }
-
-        //    var obj = объект.ЭтоТип ? null : объект.O;
-
-        //    try
-        //    {
-        //        result = res.Invoke(obj, args);
-        //    }
-        //    catch (Exception e)
-        //    {
-        //        AutoWrap.СообщитьОбИсключении("методе", ИмяМетода, e);
-
-        //        return false;
-
-        //    }
-
-        //    return true;
-
-
-        //}
 
         public override bool TryInvokeMember(InvokeMemberBinder binder, object[] args, out object result)
         {
-            result = null;
-          //  Error = null;
-            var ИмяМетода = binder.Name;
+            var methodName = binder.Name;
 
-            var ТипыПараметров = AllMethodsForName.GetTypesParameters(args);
-            var obj = объект.IsType ? null : объект.O;
-            var Тип = объект.T;
-            var IsStatic = объект.IsType;
+            var typesParameters = AllMethodsForName.GetTypesParameters(args);
+            var obj = _wrap.IsType ? null : _wrap.Object;
+            var type = _wrap.Type;
+            var isStatic = _wrap.IsType;
 
-            if (НайтиИВыполнитьДженерикМетод(obj, Тип, ИмяМетода, IsStatic, аргументы, ТипыПараметров, args, out result))
+            if (ExecuteGenericMethod(obj, type, methodName, isStatic, _arguments, typesParameters, args, out result))
                 return true;
 
             // Проверим методы расширения
 
-            if (!IsStatic)
-                {
-                if (МетодыРасширения.НайтиИВыполнитьМетодРасширенияДляДженерикТипа(obj, ИмяМетода, аргументы, ТипыПараметров, args, out result))
-                   return true;
-                }
+            if (!isStatic)
+            {
+                if (ExtensionMethod.ExecuteExtensionMethodGenericType(obj, methodName, _arguments,
+                    typesParameters, args, out result))
+                    return true;
+            }
 
-          //  Error=AutoWrap.СообщитьОбОшибке("не найден дженерик тип "+ИмяМетода);
             return false;
-
-
         }
     }
-    public class ТипизированныйЭнумератор : System.Collections.IEnumerable
-    {
-        System.Collections.IEnumerable Энумератор;
-        TypeInfo TI;
-        Type Тип;
-        public ТипизированныйЭнумератор(System.Collections.IEnumerable Энумератор, Type Тип)
-        {
-            this.Энумератор = Энумератор;
-            this.TI = Тип.GetTypeInfo();
-            this.Тип = Тип;
 
+    public class TypedEnumerator : IEnumerable
+    {
+        private System.Collections.IEnumerable _enumerator;
+        private TypeInfo _typeInfo;
+        private Type _type;
+
+        public TypedEnumerator(IEnumerable enumerator, Type type)
+        {
+            _enumerator = enumerator;
+            _typeInfo = type.GetTypeInfo();
+            _type = type;
         }
 
         public IEnumerator GetEnumerator()
         {
-
-            foreach (var str in Энумератор)
+            foreach (var str in _enumerator)
             {
                 object res = null;
-                if (str != null && TI.IsInstanceOfType(str))
-                {
-                    res = new AutoWrap(str, Тип);
-                }
+                if (str != null && _typeInfo.IsInstanceOfType(str)) res = new AutoWrap(str, _type);
 
                 yield return res;
             }
-
         }
     }
 
-    public class AsyncRuner
+    public class AsyncRunner
     {
-      static  bool  ПолучитьДанныеОВыполненииЗадачи(Task t, out string Error)
+        private static bool GetTaskResult(Task task, out string error)
         {
-            if (t.IsFaulted)
+            if (task.IsFaulted)
             {
                 var sb = new StringBuilder();
-                Exception ex = t.Exception;
+                Exception ex = task.Exception;
                 sb.AppendLine(ex.Message);
                 while (ex is AggregateException && ex.InnerException != null)
                 {
                     ex = ex.InnerException;
                     sb.AppendLine(ex.Message);
-
                 }
-                Error = sb.ToString();
-                return false;
 
+                error = sb.ToString();
+                return false;
             }
-            else if (t.IsCanceled)
+            else if (task.IsCanceled)
             {
-                Error="Canclled.";
+                error = "Canclled.";
                 return false;
             }
 
-            Error = null;
+            error = null;
             return true;
-
         }
-        public static void Execute<T>(Task<T> Задача, Action<bool, object> callBack)
+
+        public static void Execute<T>(Task<T> task, Action<bool, object> callBack)
         {
-
-            Задача.ContinueWith(t =>
+            task.ContinueWith(t =>
             {
-
-              
-                string Error;
-               if (ПолучитьДанныеОВыполненииЗадачи(t, out Error))
+                if (GetTaskResult(t, out var error))
                 {
-                   
                     var res = (object)t.Result;
-                   
                     callBack(true, res);
                 }
-               else
-                {
-
-                   callBack(false, Error);
-                }
-                           
-
-
-
-            });
-            }
-
-        public static void TaskExecute(Task Задача, Action<bool, object> callBack)
-        {
-
-            Задача.ContinueWith(t =>
-            {
-
-                string Error;
-                if (ПолучитьДанныеОВыполненииЗадачи(t, out Error))
-                {
-
-
-                    callBack(true, null);
-                }
-                else
-                {
-                   
-                    callBack(true, Error);
-
-                }
-
-
-
+                else callBack(false, error);
             });
         }
 
-
+        public static void TaskExecute(Task task, Action<bool, object> callBack)
+        {
+            task.ContinueWith(t => { callBack(true, GetTaskResult(t, out var error) ? null : error); });
+        }
     }
-
 
     public class ClassForEventCEF
     {
-
-
-        EventInfo EI;
+        private EventInfo _eventInfo;
         public Guid EventKey;
         public Action<Guid, object> CallBack;
         public object WrapperForEvent;
-        public ClassForEventCEF(object WrapperForEvent, Guid EventKey, EventInfo EI, Action<Guid,object> CallBack)
+
+        public ClassForEventCEF(object wrapperForEvent, Guid eventKey, EventInfo eventInfo, Action<Guid, object> callBack)
         {
-            this.EventKey = EventKey;
-            this.EI = EI;
-            this.CallBack = CallBack;
-            this.WrapperForEvent = WrapperForEvent;
-            EI.AddEventHandler(WrapperForEvent, new System.Action<object>(CallEvent));
+            EventKey = eventKey;
+            _eventInfo = eventInfo;
+            CallBack = callBack;
+            WrapperForEvent = wrapperForEvent;
+            eventInfo.AddEventHandler(wrapperForEvent, new System.Action<object>(CallEvent));
         }
 
         public void CallEvent(object value)
         {
-            try { 
-               CallBack(EventKey,value);
+            try
+            {
+                CallBack(EventKey, value);
             }
-            catch(Exception)
+            catch (Exception)
             {
                 // Соединение разорвано
                 // Возможно клиент закончил работу
                 // Отпишемся от события
                 RemoveEventHandler();
-
             }
-
         }
 
         public void RemoveEventHandler()
         {
-            EI.RemoveEventHandler(WrapperForEvent, new System.Action<object>(CallEvent));
-
+            _eventInfo.RemoveEventHandler(WrapperForEvent, new System.Action<object>(CallEvent));
         }
-
     }
 
-
-    public class ДляВыполненияЗадачи<TResult>
-{
-
-    static public void Выполнить(System.Threading.Tasks.Task<TResult> Задача, AsyncRuner выполнитель)
+    public class ExtensionMethod
     {
-        
+        private static Type[] _linqExtensionTypes = GetLinqExtensionTypes();
+        private static Type _enumerableType = typeof(IEnumerable<>);
 
-    }
-}
-
-    public class МетодыРасширения
-    {
-        static Type[] ТипыРасширенияLinq = ПолучитьТипыРасширенийLinq();
-        static bool ПодходитДженерикПараметр(Type ДженерикТип, Type тип)
+        private static bool SuitableGenericParameter(Type genericType, Type type)
         {
-            var TI = ДженерикТип.GetTypeInfo();
-            if (!TI.IsGenericParameter) return false;
+            var typeInfo = genericType.GetTypeInfo();
+            if (!typeInfo.IsGenericParameter) return false;
 
-            bool ЕстьОграничения = false;
-            Type[] tpConstraints = TI.GetGenericParameterConstraints();
+            bool limitations = false;
+            Type[] tpConstraints = typeInfo.GetGenericParameterConstraints();
             foreach (Type tpc in tpConstraints)
             {
-                if (tpc.IsAssignableFrom(тип)) return true;
-                ЕстьОграничения = true;
+                if (tpc.IsAssignableFrom(type)) return true;
+                limitations = true;
             }
 
-            if (ЕстьОграничения) return false;
-
-
+            if (limitations) return false;
 
             return true;
         }
 
-        static Type[] НайтиМетодыВТипах(Type[] types, Type extendedType, string MethodName, Func<MethodInfo, bool> filter = null)
+        private static Type[] FindType(Type[] types, Type extendedType, string methodName, Func<MethodInfo, bool> filter = null)
         {
-
             var query = from type in types
-                        let TI = type.GetTypeInfo()
-                        where TI.IsSealed && TI.IsAbstract
-                        let ИмяМетода = InformationOnTheTypes.ИмяМетодаПоСинониму(type, MethodName)
-                        from method in TI.GetMethods()
-                        where method.IsStatic && method.IsDefined(typeof(System.Runtime.CompilerServices.ExtensionAttribute), false)
-                         && method.Name == ИмяМетода && (filter == null ? true : filter(method))
-                        let ParameterType = method.GetParameters()[0].ParameterType
-                        where (ParameterType.IsAssignableFrom(extendedType) || ДанныеОДженерикМетоде.ПодходитДженерикПараметр(ParameterType, extendedType))
-
+                        let typeInfo = type.GetTypeInfo()
+                        where typeInfo.IsSealed && typeInfo.IsAbstract
+                        let synonym = InformationOnTheTypes.ИмяМетодаПоСинониму(type, methodName)
+                        from method in typeInfo.GetMethods()
+                        where method.IsStatic && method.IsDefined(typeof(ExtensionAttribute), false)
+                                              && method.Name == synonym && (filter?.Invoke(method) ?? true)
+                        let parameterType = method.GetParameters()[0].ParameterType
+                        where (parameterType.IsAssignableFrom(extendedType) ||
+                               ДанныеОДженерикМетоде.ПодходитДженерикПараметр(parameterType, extendedType))
                         select type;
-
 
             return query.Distinct().ToArray();
         }
-        static Type[] GetExtensionMethods(Assembly assembly, Type extendedType, string MethodName, Func<MethodInfo,bool> filter=null)
+
+        private static Type[] GetExtensionMethods(Assembly assembly, Type extendedType, string methodName,
+            Func<MethodInfo, bool> filter = null)
+            => FindType(assembly.GetTypes(), extendedType, methodName, filter);
+
+        private static Type[] GetLinqExtensionTypes()
         {
-
-
-            var types = assembly.GetTypes();
-
-            return НайтиМетодыВТипах(types, extendedType, MethodName, filter);
-
-
-        }
-
-
-        static Type[] ПолучитьТипыРасширенийLinq()
-        {
-            var ТипПеречислителя = typeof(IEnumerable<>);
-            var assembly = (typeof(System.Linq.Enumerable)).GetTypeInfo().Assembly;
+            var assembly = (typeof(Enumerable)).GetTypeInfo().Assembly;
             var query = from type in assembly.GetTypes()
-                        let TI = type.GetTypeInfo()
-                        where TI.IsSealed && TI.IsAbstract
-                        from method in TI.GetMethods()
-                        where method.IsStatic && method.IsDefined(typeof(System.Runtime.CompilerServices.ExtensionAttribute), false) && method.IsGenericMethod
-                        let ParameterType = method.GetParameters()[0].ParameterType
-                        where ParameterType.IsConstructedGenericType && ParameterType.GetGenericTypeDefinition() == ТипПеречислителя
-
+                        let typeInfo = type.GetTypeInfo()
+                        where typeInfo.IsSealed && typeInfo.IsAbstract
+                        from method in typeInfo.GetMethods()
+                        where method.IsStatic && method.IsDefined(typeof(ExtensionAttribute), false) && method.IsGenericMethod
+                        let parameterType = method.GetParameters()[0].ParameterType
+                        where parameterType.IsConstructedGenericType &&
+                              parameterType.GetGenericTypeDefinition() == _enumerableType
                         select type;
-
 
             return query.Distinct().ToArray();
         }
 
-
-       
-       static bool ПроверитьМетодыРасширений(Type[] типы, AutoWrap AW, string MethodName, object[] параметры, out object result)
+        private static bool CheckExtensionMethods(Type[] types, AutoWrap autoWrap, string methodName, object[] parameters,
+            out object result)
         {
             result = null;
-            if (типы.Length == 0) return false;
+            if (types.Length == 0) return false;
 
-            var args = new object[параметры.Length + 1];
-            Array.Copy(параметры, 0, args, 1, параметры.Length);
-            args[0] = AW.O;
-            foreach (var type in типы)
+            var args = new object[parameters.Length + 1];
+            Array.Copy(parameters, 0, args, 1, parameters.Length);
+            args[0] = autoWrap.Object;
+            foreach (var type in types)
             {
                 try
                 {
-                    var Метод = InformationOnTheTypes.FindMethod(type, true, MethodName, args);
-                    if (Метод != null)
+                    var method = InformationOnTheTypes.FindMethod(type, true, methodName, args);
+                    if (method != null)
                     {
-                        result = Метод.ExecuteMethod(null, args);
-                        Array.Copy(args, 1, параметры, 0, параметры.Length);
+                        result = method.ExecuteMethod(null, args);
+                        Array.Copy(args, 1, parameters, 0, parameters.Length);
 
                         return true;
-
                     }
                 }
                 catch (Exception)
                 {
-
+                    // ignored
                 }
-
             }
 
             return false;
-
         }
 
-        
-
-        public static bool НайтиИВыполнитьМетодРасширения(AutoWrap AW, string MethodName,object[] параметры, out object result)
+        public static bool ExecuteExtensionMethod(AutoWrap autoWrap, string methodName, object[] parameters, out object result)
         {
             result = null;
-            if (AW.IsType)
+            if (autoWrap.IsType)
             {
-                if (MethodName== "GetTypeInfo")
+                if (methodName == "GetTypeInfo")
                 {
-                    result = System.Reflection.IntrospectionExtensions.GetTypeInfo(AW.T);
+                    result = autoWrap.Type.GetTypeInfo();
                     return true;
-
                 }
+
                 return false;
             }
-            var тип = AW.T;
-            var assembly = тип.GetTypeInfo().Assembly;
-            var типы = GetExtensionMethods(assembly, тип, MethodName);
 
-            if (ПроверитьМетодыРасширений(типы, AW, MethodName, параметры, out result))
+            var assembly = autoWrap.Type.GetTypeInfo().Assembly;
+            var types = GetExtensionMethods(assembly, autoWrap.Type, methodName);
+
+            if (CheckExtensionMethods(types, autoWrap, methodName, parameters, out result))
                 return true;
 
-
-            var ТипПеречислителя = typeof(IEnumerable<>);
-            if (тип.IsGenericTypeOf(ТипПеречислителя.GetTypeInfo(), ТипПеречислителя))
+            if (autoWrap.Type.IsGenericTypeOf(_enumerableType.GetTypeInfo(), _enumerableType))
             {
-                типы = НайтиМетодыВТипах(ТипыРасширенияLinq, тип, MethodName, (Метод) => Метод.IsGenericMethod);
-                return (ПроверитьМетодыРасширений(типы, AW, MethodName, параметры, out result)) ;
+                types = FindType(_linqExtensionTypes, autoWrap.Type, methodName, (method) => method.IsGenericMethod);
+                return (CheckExtensionMethods(types, autoWrap, methodName, parameters, out result));
             }
 
             return false;
         }
 
-        //public static bool НайтиИВыполнитьДженерикМетод(object obj, Type Тип, string ИмяМетода,bool IsStatic, Type[] Аргументы,Type[] ТипыПараметров, object[] параметры, out object result)
-
-         public static bool ПроверитьМетодыРасширенийДженерикТипов(Type[] типы, object obj, string ИмяМетода, Type[] Аргументы, Type[] ТипыПараметров, object[] параметры, out object result)
+        public static bool CheckExtensionMethodsGenericTypes(Type[] types, object obj, string methodName,
+            Type[] arguments, Type[] parametersTypes, object[] parameters, out object result)
         {
             result = null;
-            if (типы.Length == 0) return false;
+            if (types.Length == 0) return false;
 
-            var тип = obj.GetType();
-            var args = new object[параметры.Length + 1];
-            Array.Copy(параметры, 0, args, 1, параметры.Length);
+            var args = new object[parameters.Length + 1];
+            Array.Copy(parameters, 0, args, 1, parameters.Length);
             args[0] = obj;
 
-            var ТипыПараметровРасширения = new Type[ТипыПараметров.Length + 1];
-            Array.Copy(ТипыПараметров, 0, ТипыПараметровРасширения, 1, ТипыПараметров.Length);
-            ТипыПараметровРасширения[0] = тип;
+            var extensionParameterTypes = new Type[parametersTypes.Length + 1];
+            Array.Copy(parametersTypes, 0, extensionParameterTypes, 1, parametersTypes.Length);
+            extensionParameterTypes[0] = obj.GetType();
 
-            foreach (var type in типы)
+            foreach (var type in types)
             {
                 try
                 {
-                    var res = ДженерикВыполнитель.НайтиИВыполнитьДженерикМетод(obj, type, ИмяМетода, true, Аргументы, ТипыПараметровРасширения, args, out result);
+                    var res = GenericExecutor.ExecuteGenericMethod(obj, type, methodName, true, arguments,
+                        extensionParameterTypes, args, out result);
                     if (res)
                     {
-
-                        Array.Copy(args, 1, параметры, 0, параметры.Length);
-
+                        Array.Copy(args, 1, parameters, 0, parameters.Length);
                         return true;
-
                     }
                 }
                 catch (Exception)
                 {
-
+                    // ignored
                 }
-
             }
 
             return false;
-
         }
-        public static bool НайтиИВыполнитьМетодРасширенияДляДженерикТипа(object obj, string ИмяМетода,  Type[] Аргументы, Type[] ТипыПараметров, object[] параметры, out object result)
+
+        public static bool ExecuteExtensionMethodGenericType(object obj, string methodName, Type[] arguments, Type[] parametersTypes, object[] parameter, out object result)
         {
-
             result = null;
-             var тип = obj.GetType();
-            var assembly = тип.GetTypeInfo().Assembly;
+            var type = obj.GetType();
+            var assembly = type.GetTypeInfo().Assembly;
 
-            var типы = GetExtensionMethods(assembly, тип, ИмяМетода, (Метод)=> Метод.IsGenericMethod && Метод.GetGenericArguments().Length== Аргументы.Length);
+            var types = GetExtensionMethods(assembly, type, methodName,
+                (methodInfo) =>
+                    methodInfo.IsGenericMethod && methodInfo.GetGenericArguments().Length == arguments.Length);
 
-            if (ПроверитьМетодыРасширенийДженерикТипов(типы, obj, ИмяМетода, Аргументы, ТипыПараметров, параметры, out result))
+            if (CheckExtensionMethodsGenericTypes(types, obj, methodName, arguments, parametersTypes, parameter, out result))
                 return true;
 
-            var ТипПеречислителя = typeof(IEnumerable<>);
-            if (тип.IsGenericTypeOf(ТипПеречислителя.GetTypeInfo(), ТипПеречислителя))
+            if (type.IsGenericTypeOf(_enumerableType.GetTypeInfo(), _enumerableType))
             {
-
-                типы = НайтиМетодыВТипах(ТипыРасширенияLinq, тип, ИмяМетода);
-                return ПроверитьМетодыРасширенийДженерикТипов(типы, obj, ИмяМетода, Аргументы, ТипыПараметров, параметры, out result);
+                types = FindType(_linqExtensionTypes, type, methodName);
+                return CheckExtensionMethodsGenericTypes(types, obj, methodName, arguments, parametersTypes, parameter, out result);
             }
 
-          return false;
-
+            return false;
         }
     }
 }

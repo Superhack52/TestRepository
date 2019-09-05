@@ -1,7 +1,6 @@
-﻿using NetObjectToNative;
-
-namespace Server
+﻿namespace Server
 {
+    using NetObjectToNative;
     using System;
     using System.Threading;
 

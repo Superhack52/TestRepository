@@ -10,7 +10,7 @@ namespace NetObjectToNative
     
     public class WrapperForEvents<T>
     {
-        public static readonly Func<Action<Guid, object>, T, object> WrapperCreater;
+        public static readonly Func<Action<Guid, object>, T, object> WrapperCreator;
 
 
         public static Func<Action<Guid, object>, T, object> CreateWrapper()
@@ -36,7 +36,7 @@ namespace NetObjectToNative
         }
         static WrapperForEvents()
         {
-            WrapperCreater = CreateWrapper();
+            WrapperCreator = CreateWrapper();
 
 
         }

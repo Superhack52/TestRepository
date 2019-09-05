@@ -93,10 +93,7 @@
 
         public IEnumerator GetEnumerator() => new AutoWapEnumerator(this, Connector);
 
-        ~AutoWrapClient()
-        {
-            Dispose(false);
-        }
+        ~AutoWrapClient() => Dispose(false);
 
         public void Dispose()
         {
@@ -139,7 +136,6 @@
 
             bw.Flush();
 
-                //todo 
             return GetResultWithChangeParams(connector.SendMessage(ms), ref result, connector, args);
         }
 
@@ -206,8 +202,8 @@
         internal static void GetAsyncResult(BinaryReader res, TaskCompletionSource<object> result,
             TCPClientConnector connector)
         {
-            object asyncres = null;
-            if (!GetResult(res, ref asyncres, connector)) result.SetException(new Exception(connector.LastError));
+            object asynchronous = null;
+            if (!GetResult(res, ref asynchronous, connector)) result.SetException(new Exception(connector.LastError));
         }
 
         #region Dynamic override
@@ -223,7 +219,7 @@
                 object[] newArgs = new object[args.Length + 1];
                 args.CopyTo(newArgs, 1);
                 newArgs[0] = this;
-                return TryInvokeMember(0, "New", newArgs, out result, Connector); ;
+                return TryInvokeMember(0, "New", newArgs, out result, Connector);
             }
             if (args.Length > 0 && args[0] != null && args[0].GetType() == typeof(object[]))
                 return TryInvokeGenericMethod(Target, methodName, args, out result, Connector);
@@ -236,7 +232,7 @@
             result = null;
             if (Connector.ServerIsClosed) return false;
 
-            if (args.Length == 1 && object.ReferenceEquals(args[0], FlagDeleteObject))
+            if (args.Length == 1 && ReferenceEquals(args[0], FlagDeleteObject))
             {
                 Dispose(true);
                 return true;
@@ -377,7 +373,7 @@
 
         public override bool Equals(object obj)
         {
-            object[] args = new object[] { obj };
+            object[] args = { obj };
 
             if (TryInvokeMember(Target, "Equals", args, out var result, Connector))
                 return (bool)result;
@@ -468,7 +464,7 @@
                     return true;
                 }
 
-                return TryAsyncInvokeMember(0, "ReturnParam", new object[] { resAsync }, out result, Connector);
+                return TryAsyncInvokeMember(0, "ReturnParam", new[] { resAsync }, out result, Connector);
             }
             return TryAsyncInvokeMember(Target, binder.Name, args, out result, Connector);
         }
@@ -492,7 +488,7 @@
                 return true;
             }
 
-            return TryAsyncInvokeMember(0, "ReturnParam", new object[] { resAsync }, out result, Connector);
+            return TryAsyncInvokeMember(0, "ReturnParam", new[] { resAsync }, out result, Connector);
         }
 
         #endregion Override
@@ -510,6 +506,6 @@
 
         public RefParam() => this.Value = null;
 
-        public override string ToString() => Value?.ToString();
+        public override string ToString() => Value?.ToString() ?? throw new InvalidOperationException();
     }
 }

@@ -1,138 +1,57 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.IO;
-using System.Globalization;
-using System.Reflection;
-using System.Text;
-using Microsoft.CodeAnalysis.CSharp;
-namespace NetObjectToNative
+﻿namespace NetObjectToNative
 {
+    using Microsoft.CodeAnalysis.CSharp;
+    using System;
+    using System.Globalization;
+    using System.IO;
+    using System.Reflection;
+    using System.Text;
+
     public partial class NetObjectToNative
     {
-        public static string ТестВыделенияСтроки(string str)
+        public static void CloseResource(Object obj)
         {
-
-            return str;
-        }
-        public static void ЗакрытьРесурс(Object Oбъект)
-        {
-
-            IDisposable d = Oбъект as IDisposable;
-
-            if (d != null) d.Dispose();
-
+            if (obj is IDisposable d) d.Dispose();
         }
 
-      
-        public static object ПоследняяОшибка
-        {
-            get
-            {
-                if (AutoWrap.LastError == null) return null;
+        public static object LastError => AutoWrap.LastError;
 
-                return AutoWrap.LastError;
-            }
-        }
+        public static string ToString(object valueOrig) => valueOrig != null ? valueOrig.ToString() : "неопределено";
 
-       
-        public static string ВСтроку(object valueOrig)
-        {
-            if (valueOrig == null)
-                return "неопределено";
-
-            return valueOrig.ToString();
-
-
-        }
-
-        public static string toString(object valueOrig)
-        {
-            return ВСтроку(valueOrig);
-
-        }
-        public static Type GetType(string type)
-        {
-
-            return Type.GetType(type, false);
-
-        }
+        public static Type GetType(string type) => Type.GetType(type, false);
 
         public static Type FindTypeForCreateObject(object TypeOrig)
         {
-
-
-
             Type type = TypeOrig as Type;
 
             if (type != null)
             {
-
             }
-            else if (TypeOrig.GetType() == typeof(String))
-            {
-
-                type = GetType((string)TypeOrig);
-
-
-            }
+            else if (TypeOrig is string asString) type = GetType(asString);
 
             if (type == null)
             {
-                string TypeStr = TypeOrig.ToString();
-                string ошибка = " неверный тип " + TypeStr;
-                // MessageBox.Show(ошибка);
-                throw new Exception(ошибка);
+                string typeStr = TypeOrig.ToString();
+                string error = " неверный type " + typeStr;
+                throw new Exception(error);
             }
 
             return type;
         }
 
-        public static Type TypeForCreateObject(object TypeOrig)
-        {
+        public static Type TypeForCreateObject(object typeOrig) => FindTypeForCreateObject(typeOrig);
 
-            return FindTypeForCreateObject(TypeOrig);
-        }
-        public static object CreateObject(object type)
-        {
+        public static object CreateObject(object type) =>
+            AutoWrap.WrapObject(System.Activator.CreateInstance(FindTypeForCreateObject(type)));
 
-            var res = FindTypeForCreateObject(type);
-            return AutoWrap.WrapObject(System.Activator.CreateInstance(res));
+        public static object New(object type, params object[] argOrig) =>
+            System.Activator.CreateInstance(FindTypeForCreateObject(type), argOrig);
 
-        }
+        public static object CreateArray(object type, int length) =>
+            Array.CreateInstance(FindTypeForCreateObject(type), length);
 
-
-
-
-
-
-
-        public static object New(object Тип, params object[] argOrig)
-        {
-            //   MessageBox.Show(Тип.ToString() + " параметров=" + args.Length.ToString());
-
-            var res = FindTypeForCreateObject(Тип);
-
-            object[] args = argOrig;
-            return System.Activator.CreateInstance(res, args);
-
-        }
-
-       
-            
-
-
-        public static object CreateArray(object type, int length)
-        {
-            return Array.CreateInstance(FindTypeForCreateObject(type), length);
-        }
-
-       
-
-       
-
-        // Возвращает типизированный Дженерик тип 
-        // примеры использования 
+        // Возвращает типизированный Дженерик type
+        // примеры использования
         // Int32=Net.GetType("System.Int32");
         // List=Net.GetGenericType("System.Collections.Generic.List`1",Int32);
         // List=Net.GetGenericType(("System.Collections.Generic.List`1","System.Int32"));
@@ -142,64 +61,37 @@ namespace NetObjectToNative
 
         public static object GetGenericType(object type, params object[] argOrig)
         {
-            return ПолучитьДженерикТип(type, argOrig);
-
-        }
-        public static object ПолучитьДженерикТип(object type, params object[] argOrig)
-        {
-
             var res = FindTypeForCreateObject(type);
 
             if (res == null)
             {
-                string ошибка = " неверный тип " + type.ToString();
+                string ошибка = " неверный type " + type.ToString();
 
                 throw new Exception(ошибка);
             }
 
-            Type[] Типы = new Type[argOrig.Length];
+            Type[] types = new Type[argOrig.Length];
 
             for (int i = 0; i < argOrig.Length; i++)
-                Типы[i] = FindTypeForCreateObject(argOrig[i]);
+                types[i] = FindTypeForCreateObject(argOrig[i]);
 
-            return res.MakeGenericType(Типы);
-
+            return res.MakeGenericType(types);
         }
-
-
-        // Оставлен для севместимости.
-        public static object ТипКакОбъект(Type Тип)
-        {
-
-
-            return new AutoWrap(Тип, Тип.GetType());
-        }
-
 
         // Получения TypeInfo
         // В текущей версии поиск раширений для типа не ищется
         //static TypeInfo GetTypeInfo(this Type type);
-        public static object GetTypeInfo(object Тип)
-        {
-
-            var тип = FindTypeForCreateObject(Тип);
-
-            return new AutoWrap(тип.GetTypeInfo());
-
-
-
-        }
-
+        public static object GetTypeInfo(object type) => new AutoWrap(FindTypeForCreateObject(type).GetTypeInfo());
 
         // Получение информации о типе
-        public static string ИнформацияОТипе(object Тип)
+        public static string TypeInformation(object type)
         {
             Type тип;
-            if (Тип is Type)
-                тип = (Type)Тип;
+            if (type is Type asType)
+                тип = asType;
             else
-                тип = Тип.GetType();
-            //   var тип = typeof(AutoWrap);
+                тип = type.GetType();
+
             var sb = new StringBuilder();
             sb.AppendFormat("AssemblyQualifiedName {0}", тип.AssemblyQualifiedName).AppendLine();
             sb.AppendFormat("AssemblyQualifiedName {0}", тип.GetTypeInfo().AssemblyQualifiedName).AppendLine();
@@ -213,472 +105,302 @@ namespace NetObjectToNative
             return sb.ToString();
         }
 
-
-
         // Получает энумератор для обхода коллекции через MoveNext()
         // И получения результата через Current
         // Пример использования
         //Список=ъ(Врап.ПолучитьЭнумератор(лист.ПолучитьСсылку()));
         // Пока Список.MoveNext() Цикл
         //     Зазача = ъ(Список.Current);
-        // Сообщить(Зазача.Result); 
+        // Сообщить(Зазача.Result);
         //КонецЦикла
 
-        public static object GetIterator(object obj)
-        {
-
-            return ПолучитьЭнумератор(obj);
-        }
-        public static object ПолучитьЭнумератор(object obj)
-        {
-
-
-            System.Collections.IEnumerable enumer = (System.Collections.IEnumerable)obj;
-
-
-            System.Collections.IEnumerator e = enumer.GetEnumerator();
-
-            return new AutoWrap(e, typeof(System.Collections.IEnumerator));
-
-
-        }
-
+        public static object GetIterator(object obj) =>
+            new AutoWrap(((System.Collections.IEnumerable)obj).GetEnumerator(),
+                typeof(System.Collections.IEnumerator));
 
         // Получить типизированный энумератор для получения элемента
         // с приведением типа
         // Пример использования
-        //	
+        //
         //      Ячейки=Net.GetTypeIterator(Ячейки,INode);
         //      Пока Ячейки.MoveNext() Цикл
         //          Ячейка =Ячейки.Current;
         //          (Ячейка.TextContent);
         //	    КонецЦикла
 
-        public static object GetTypeIterator(object obj, Type тип)
-        {
+        public static object GetTypeIterator(object obj, Type type) => new AutoWrap(
+            (new TypedEnumerator((System.Collections.IEnumerable)obj, type)).GetEnumerator(),
+            typeof(System.Collections.IEnumerator));
 
-            return ПолучитьТипЭнумератор(obj, тип);
-        }
-        public static object ПолучитьТипЭнумератор(object obj, Type тип)
-        {
-
-
-            System.Collections.IEnumerable enumer = (System.Collections.IEnumerable)obj;
-
-            enumer = new ТипизированныйЭнумератор(enumer, тип);
-            System.Collections.IEnumerator e = enumer.GetEnumerator();
-
-            return new AutoWrap(e, typeof(System.Collections.IEnumerator));
-
-
-        }
-
-        // Получаем массив объектов используя эффект получения массива параметров при использовании 
+        // Получаем массив объектов используя эффект получения массива параметров при использовании
         // ключевого слова params
-        // Пример использования 
+        // Пример использования
         //МассивПараметров=ъ(Врап.Массив(doc.ПолучитьСсылку(), "a[title='The Big Bang Theory']"));
 
-            public static object GetNetArray(params object[] argOrig)
-        {
-
-            return argOrig;
-
-        }
-        public static object Массив(params object[] argOrig)
-        {
-
-            return argOrig;
-        }
+        public static object GetNetArray(params object[] argOrig) => argOrig;
 
         // Получаем масив элементов определенного типа
-        // Тип выводится по первому элементу с индексом 0
+        // type выводится по первому элементу с индексом 0
         // Пример использования
         // ТипыПараметров=ъ(Врап.ТипМассив(IParentNode.ПолучитьСсылку(),String.ПолучитьСсылку()));
 
         public static object GetTypeArray(params object[] argOrig)
         {
+            if (!(argOrig != null && argOrig.Length > 0)) return new object[0];
+            var type = argOrig[0].GetType();
+            var typeInfo = type.GetTypeInfo();
+            var typeRes = typeof(System.Collections.Generic.List<>).MakeGenericType(type);
 
-            return ТипМассив(argOrig);
-
-        }
-        public static object ТипМассив(params object[] argOrig)
-        {
-            if (!(argOrig != null && argOrig.Length > 0))
-                return new object[0];
-
-            var Тип = argOrig[0].GetType();
-            var TI = Тип.GetTypeInfo();
-            var TypeRes = typeof(System.Collections.Generic.List<>).MakeGenericType(Тип);
-
-            var res = Activator.CreateInstance(TypeRes);
-            var MI = TypeRes.GetTypeInfo().GetMethod("Add");
-            var MI2 = TypeRes.GetTypeInfo().GetMethod("ToArray");
+            var res = Activator.CreateInstance(typeRes);
+            var addMethod = typeRes.GetTypeInfo().GetMethod("Add");
+            var toArrayMethod = typeRes.GetTypeInfo().GetMethod("ToArray");
             foreach (var str in argOrig)
             {
-                if (str != null && TI.IsInstanceOfType(str))
-                    MI.Invoke(res, new object[] { str });
-
+                if (str != null && typeInfo.IsInstanceOfType(str)) addMethod.Invoke(res, new object[] { str });
             }
 
-            return MI2.Invoke(res, new object[0]); ;
+            return toArrayMethod.Invoke(res, new object[0]); ;
         }
-
 
         // Ищет Дженерик метод по дженерик аргументам и типам параметров
         // Пример использования
         //ТипыПараметров=ъ(Врап.ТипМассив(IParentNode.ПолучитьСсылку(),String.ПолучитьСсылку()));
         // ТипыАргументов=ъ(Врап.ТипМассив(IHtmlAnchorElement.ПолучитьСсылку()));
         ////public static TElement QuerySelector<TElement>(this IParentNode parent, string selectors) where TElement : class, IElement;
-        //стр=Врап.НайтиДженерикМетод(ApiExtensions.ПолучитьСсылку(),true,"QuerySelector",ТипыАргументов.ПолучитьСсылку(),ТипыПараметров.ПолучитьСсылку());
+        //стр=Врап.FindGenericMethod(ApiExtensions.ПолучитьСсылку(),true,"QuerySelector",ТипыАргументов.ПолучитьСсылку(),ТипыПараметров.ПолучитьСсылку());
         //QuerySelector_AnchorElement = ъ(стр);
 
-        public static ИнфoрмацияОМетоде НайтиДженерикМетод(Type Тип, bool IsStatic, string ИмяМетода, Type[] ДженерикПараметры, Type[] ПараметрыМетода)
+        public static ИнфoрмацияОМетоде FindGenericMethod(Type type, bool isStatic, string methodName, Type[] genericParameters, Type[] methodParameters)
         {
-
-            var res = InformationOnTheTypes.FindGenericMethodsWithGenericArguments(Тип, IsStatic, ИмяМетода, ДженерикПараметры, ПараметрыМетода);
+            var res = InformationOnTheTypes.FindGenericMethodsWithGenericArguments(type, isStatic, methodName, genericParameters, methodParameters);
 
             if (res == null)
             {
-
-                //  AutoWrap.СообщитьОбОшибке("Не найден метод "+ ИмяМетода);
-                var ошибка = "Не найден метод " + ИмяМетода;
-                throw new Exception(ошибка);
+                //  AutoWrap.СообщитьОбОшибке("Не найден метод "+ methodName);
+                throw new Exception("Не найден метод " + methodName);
             }
             return res;
         }
 
-        // Асинхронное выполнение задачи
-        // Пример использования
-        //Задача=ъ(Клиент.GetStringAsync(стр));
-        // объект=ПолучитьДанныеДляЗадачи(стр, сч);
-        //public static void ВыполнитьЗадачу(System.Threading.Tasks.Task Задача, String ИмяМетода, Object ДанныеДляЗадача)
-        //Врап.ВыполнитьЗадачу(Задача.ПолучитьСсылку(),"ПолученаСтраница",объект.ПолучитьСсылку());
-        // Результат получается в процедуре
-        //Процедура ВнешнееСобытие(Источник, Событие, Данные)
-        //  Если Источник = "АсинхронныйВыполнитель" Тогда
-        //      Данные = ъ(Данные);
-        //      Выполнить(Событие+"(Данные)");
-        //  КонецЕсли; 
-        //КонецПроцедуры
-        // ИмяМетода передается в параметре Событие
-        public static void ВыполнитьЗадачу(System.Threading.Tasks.Task Задача, String ИмяМетода, Object ДанныеДляЗадача)
+        public static Assembly FindAssembly(string directory, string fileName)
         {
-         //   new АсинхронныйВыполнитель(Задача, ИмяМетода, ДанныеДляЗадача);
-
-        }
-
-
-        public static Assembly FindAssembly(string Каталог, string ИмяФайла)
-        {
-            string path = Path.Combine(Каталог, ИмяФайла);
+            string path = Path.Combine(directory, fileName);
 
             if (File.Exists(path))
             {
                 Assembly assembly;
-                try { 
-                var asm = System.Runtime.Loader.AssemblyLoadContext.GetAssemblyName(path);
-                 assembly = Assembly.Load(asm);
+                try
+                {
+                    assembly = Assembly.Load(System.Runtime.Loader.AssemblyLoadContext.GetAssemblyName(path));
                 }
-                catch (Exception) { 
-                   assembly = System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromAssemblyPath(path);
+                catch (Exception)
+                {
+                    assembly = System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromAssemblyPath(path);
                 }
-
 
                 return assembly;
-
             }
 
             return null;
         }
-        static bool FindTypeInFile(string type, string Каталог, string ИмяФайла, out Type result)
+
+        private static bool FindTypeInFile(string type, string directory, string fileName, out Type result)
         {
             result = null;
 
-            var assembly = FindAssembly(Каталог, ИмяФайла);
+            var assembly = FindAssembly(directory, fileName);
             if (assembly != null)
             {
-
-                result = assembly.GetType(type, false);
-                if (result != null) return true;
-
+                if (assembly.GetType(type, false) != null) return true;
             }
 
             return false;
         }
 
-
-        // Ищет тип по имени полному имени в файле
+        // Ищет type по имени полному имени в файле
         // ГлобальнаяСборка означает что сборка находится рядом с coreclr.dll
-        // Пример использования 
-        // List=ъ(Врап.Тип("System.Collections.Generic.List`1[System.String]"));
-        // Тестовый=ъ(Врап.Тип("TestDllForCoreClr.Тестовый","TestDllForCoreClr"));
-        // HttpClient=ъ(Врап.Тип("System.Net.Http.HttpClient, System.Net.Http,true));
+        // Пример использования
+        // List=ъ(Врап.type("System.Collections.Generic.List`1[System.String]"));
+        // Тестовый=ъ(Врап.type("TestDllForCoreClr.Тестовый","TestDllForCoreClr"));
+        // HttpClient=ъ(Врап.type("System.Net.Http.HttpClient, System.Net.Http,true));
 
-        public static Type GetType(string type, string fileName)
-        {
-            return GetType(type, fileName, false);
-        }
-           public static Type GetType(string type, string FileName = "", bool IsGlabalAssembly = false)
+        public static Type GetType(string type, string fileName) => GetType(type, fileName, false);
+
+        public static Type GetType(string type, string fileName = "", bool isGlabalAssembly = false)
         {
             Type result = null;
 
-            if (string.IsNullOrWhiteSpace(FileName))
+            if (string.IsNullOrWhiteSpace(fileName))
             {
                 result = GetType(type);
-                if (result != null)
-                    return result;
-
+                if (result != null) return result;
             }
             else
             {
-                CheckFileName(ref FileName);
-                if (!(!IsGlabalAssembly && FindTypeInFile(type, AutoWrap.NetObjectToNativeDir, FileName, out result)))
-                    FindTypeInFile(type, AutoWrap.CoreClrDir, FileName, out result);
+                CheckFileName(ref fileName);
+                if (!(!isGlabalAssembly && FindTypeInFile(type, AutoWrap.NetObjectToNativeDir, fileName, out result)))
+                    FindTypeInFile(type, AutoWrap.CoreClrDir, fileName, out result);
 
-                if (result != null)
-                {
-
-                    return result;
-                }
+                if (result != null) return result;
             }
-            string ошибка = " неверный тип " + type + " в сборке " + FileName;
-            throw new Exception(ошибка);
-
+            throw new Exception(" неверный type " + type + " в сборке " + fileName);
         }
 
-        
-        public static void CheckFileName(ref string FileName)
+        public static void CheckFileName(ref string fileName)
         {
             string AssemblyExtension = "DLL";
-            var res = FileName.LastIndexOf('.');
+            var res = fileName.LastIndexOf('.');
 
             if (res < 0)
             {
-                FileName += "." + AssemblyExtension;
+                fileName += "." + AssemblyExtension;
                 return;
             }
 
-            if (res == FileName.Length - 1)
+            if (res == fileName.Length - 1)
             {
-                FileName += AssemblyExtension;
+                fileName += AssemblyExtension;
                 return;
             }
-            var расширение = FileName.Substring(res + 1);
+            var расширение = fileName.Substring(res + 1);
             if (!AssemblyExtension.Equals(расширение, StringComparison.OrdinalIgnoreCase))
-                FileName += "." + AssemblyExtension;
-
-
+                fileName += "." + AssemblyExtension;
         }
 
-
         // Ищем сборку по путям переданным при создании компоненты
-        //ПодключитьВнешнююКомпоненту(ИмяФайла, "NetObjectToNative",ТипВнешнейКомпоненты.Native); 
+        //ПодключитьВнешнююКомпоненту(fileName, "NetObjectToNative",ТипВнешнейКомпоненты.Native);
         // Врап = Новый("AddIn.NetObjectToNative.LoaderCLR");
         // Врап.СоздатьОбертку(CoreClrDir,ДиректорияNetObjectToNative,"");
-        // Где 
+        // Где
         // CoreClrDir Это директория где лежат основные библиотеки .Net и в частности coreclr
         // ДиректорияNetObjectToNative директория где лежит эта сборка
         // на данный момент все пользовательские сборки нужно сохранять рядом с ней
-        //Пример использования 
+        //Пример использования
         //СборкаHttpClient=ъ(Врап.Сборка("System.Net.Http",истина));
         //HttpClient=ъ(СборкаHttpClient.GetType("System.Net.Http.HttpClient"));
-        public static Assembly GetAssembly(string FileName, bool IsGlabalAssembly = false)
+        public static Assembly GetAssembly(string fileName, bool isGlobalAssembly = false)
         {
-            CheckFileName(ref FileName);
+            CheckFileName(ref fileName);
 
             Assembly assembly = null;
-            if (!IsGlabalAssembly)
-                assembly = FindAssembly(AutoWrap.NetObjectToNativeDir, FileName);
+            if (!isGlobalAssembly) assembly = FindAssembly(AutoWrap.NetObjectToNativeDir, fileName);
 
             if (assembly != null) return assembly;
 
-            assembly = FindAssembly(AutoWrap.CoreClrDir, FileName);
+            assembly = FindAssembly(AutoWrap.CoreClrDir, fileName);
 
             if (assembly != null) return assembly;
 
-            string ошибка = " Не найдена сборка " + FileName;
-            throw new Exception(ошибка);
-
+            throw new Exception(" Не найдена сборка " + fileName);
         }
-
 
         // Добавляет синоним дле метода
         //Assembly=ъ(СборкаHttpClient.GetType());
-        // Врап.ДобавитьСиноним(Assembly.ПолучитьСсылку(),"Тип","GetType");
-        // Теперь вмето GetType можно использовать Тип
-        //HttpClient=ъ(СборкаHttpClient.Тип("System.Net.Http.HttpClient"));
+        // Врап.AddSynonym(Assembly.ПолучитьСсылку(),"type","GetType");
+        // Теперь вмето GetType можно использовать type
+        //HttpClient=ъ(СборкаHttpClient.type("System.Net.Http.HttpClient"));
 
-        public static void ДобавитьСиноним(object type, string Синоним, string ИмяМетода)
-        {
-            var тип = FindTypeForCreateObject(type);
-            InformationOnTheTypes.УстановитьСиноним(тип, Синоним, ИмяМетода);
-        }
+        public static void AddSynonym(object type, string synonym, string methodName) =>
+            InformationOnTheTypes.УстановитьСиноним(FindTypeForCreateObject(type), synonym, methodName);
 
         // Нужен для получения типа неподдерживаемого 1С, беззнаковые,Decimal итд
-        public static Object ChangeType(object type, object valueOrig)
-        {
+        public static Object ChangeType(object type, object valueOrig) =>
+            new AutoWrap(
+                Convert.ChangeType(AutoWrap.GetRalObject(valueOrig),
+                    FindTypeForCreateObject(type),
+                    CultureInfo.InvariantCulture));
 
-            object value = AutoWrap.GetRalObject(valueOrig);
+        // Русскоязычный аналог ChangeType
+        public static Object PrintType(object type, object valueOrig) => ChangeType(type, valueOrig);
 
-            Type result = FindTypeForCreateObject(type);
+        public static Object ToDecimal(object valueOrig) =>
+            new AutoWrap(Convert.ChangeType(
+                AutoWrap.GetRalObject(valueOrig),
+                typeof(Decimal),
+                CultureInfo.InvariantCulture));
 
-            return new AutoWrap(Convert.ChangeType(value, result, CultureInfo.InvariantCulture));
-
-        }
-
-
-        // Русскоязычный аналог ChangeType 
-        public static Object ВывестиТип(object type, object valueOrig)
-        {
-
-            return ChangeType(type, valueOrig);
-        }
-
-
-
-        public static Object ToDecimal(object valueOrig)
-        {
-
-            object value = AutoWrap.GetRalObject(valueOrig);
-
-
-            return new AutoWrap(Convert.ChangeType(value, typeof(Decimal), CultureInfo.InvariantCulture));
-
-        }
-
-        public static Object ToInt(object valueOrig)
-        {
-
-            object value = AutoWrap.GetRalObject(valueOrig);
-
-
-            return new AutoWrap(Convert.ChangeType(value, typeof(Int32), CultureInfo.InvariantCulture));
-
-        }
-
+        public static Object ToInt(object valueOrig) => new AutoWrap(Convert.ChangeType(
+            AutoWrap.GetRalObject(valueOrig),
+            typeof(Int32),
+            CultureInfo.InvariantCulture));
 
         // Аналог C# операции as
         // Создаем обертку с типом интерфейса
         // И можно вызывать методы и свойства интерфеса, так как в объекте они могут быть закрытыми
-        public static object ПолучитьИнтерфейс(object obj, object Interfase)
+        public static object GetInterface(object obj, object @interface)
         {
+            if (@interface is Type asTpe) return new AutoWrap(obj, asTpe);
 
-            if (Interfase is Type)
-                return new AutoWrap(obj, (Type)Interfase);
+            object realObject = obj;
 
-            object РеальныйОбъект = obj;
-
-            if (Interfase is string)
+            if (@interface is string interfaceName)
             {
-                string InterfaseName = (string)Interfase;
-
-                foreach (var inter in РеальныйОбъект.GetType().GetTypeInfo().GetInterfaces())
+                foreach (var inter in realObject.GetType().GetTypeInfo().GetInterfaces())
                 {
-                    if (inter.Name == InterfaseName)
-                        return new AutoWrap(РеальныйОбъект, inter);
-
+                    if (inter.Name == interfaceName)
+                        return new AutoWrap(realObject, inter);
                 }
             }
             return null;
-
-
         }
-
 
         // Битовая операция OR
         // Часто используемая для Enum
         // Пример использования
         //handler.AutomaticDecompression=Врап.OR(ссылкаGZip,ссылкаDeflate);
         //
-        public static object OR(params object[] параметры)
+        public static object OR(params object[] parameters)
         {
-            if (параметры.Length == 0)
-                return null;
+            if (parameters.Length == 0) return null;
 
+            var parameter = parameters[0];
+            var type = parameter.GetType();
 
-            var парам = параметры[0];
-            var тип = парам.GetType();
+            long res = (long)Convert.ChangeType(parameter, typeof(long));
 
-            long res = (long)Convert.ChangeType(парам, typeof(long));
+            for (int i = 1; i < parameters.Length; i++)
+                res |= (long)Convert.ChangeType(parameters[i], typeof(long));
 
-            for (int i = 1; i < параметры.Length; i++)
-                res |= (long)Convert.ChangeType(параметры[i], typeof(long));
-
-
-            if (тип.GetTypeInfo().IsEnum)
+            if (type.GetTypeInfo().IsEnum)
             {
-                var ТипЗначений = Enum.GetUnderlyingType(тип);
-                var number = Convert.ChangeType(res, ТипЗначений);
-                return Enum.ToObject(тип, number);
+                var valueType = Enum.GetUnderlyingType(type);
+                var number = Convert.ChangeType(res, valueType);
+                return Enum.ToObject(type, number);
             }
 
-            return Convert.ChangeType(res, тип);
+            return Convert.ChangeType(res, type);
         }
-
 
         // Возвращает делегат для вызова внешнего события в 1С
         // Пример использования
         //Делегат=Ъ(Врап.ПолучитьДелегатВнешнегоСобытия1C());
         // У объекта Тест есть поле
         //  public Action<string, string, string> ВнешнееСобытие1С;
-        // Которое мы установим 
+        // Которое мы установим
         //Тест.ВнешнееСобытие1С=Делегат.ПолучитьСсылку();
         // И ктоторое может быть вызвано при возникновении события
         // ВнешнееСобытие1С?.DynamicInvoke("Тестовый", "ТестовоеСообщение", значение);
 
-
-        
-
-        static IPropertyOrFieldInfo FindProperty(object объект, string ИмяДелегата)
+        private static IPropertyOrFieldInfo FindProperty(object obj, string delegateName)
         {
-
-            var T = объект.GetType();
-            var Свойcтво = InformationOnTheTypes.НайтиСвойство(T, ИмяДелегата);
-            if (Свойcтво == null)
+            var T = obj.GetType();
+            var property = InformationOnTheTypes.НайтиСвойство(T, delegateName);
+            if (property == null)
             {
-
-                throw new Exception("Не найдено Делегат  " + ИмяДелегата);
-
-
+                throw new Exception("Не найдено Делегат  " + delegateName);
             }
 
-            return Свойcтво;
+            return property;
         }
 
-    
-      
-       
+        public static string GetUniqueString() => Convert.ToBase64String(Guid.NewGuid().ToByteArray());
 
-        public static string GetUniqueString()
-        {
+        public static object ReturnParam(object obj) => obj;
 
-            return Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+        public static int StorageElementCount() => AutoWrap.ObjectsList.RealObjectCount();
 
-        }
+        public static int CountItemsInStore() => AutoWrap.ObjectsList.RealObjectCount();
 
-        public static object ReturnParam(object obj)
-        {
-            return obj;
-
-        }
-
-        public static int КоличествоЭлементовВХранилище()
-        {
-
-            return AutoWrap.ObjectsList.RealObjectCount();
-        }
-
-        public static int CountItemsInStore()
-        {
-            return AutoWrap.ObjectsList.RealObjectCount();
-
-        }
-        public static int FirstDeleted()
-        {
-
-            return AutoWrap.ObjectsList.FirstDeleted;
-        }
+        public static int FirstDeleted() => AutoWrap.ObjectsList.FirstDeleted;
     }
-
-
 }

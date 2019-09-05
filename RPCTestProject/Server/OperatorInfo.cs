@@ -1,23 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Reflection;
-using System.Linq.Expressions;
-namespace ServerRPC
+﻿namespace ServerRPC
 {
+    using System.Collections.Generic;
+    using System.Linq.Expressions;
+
     public static class OperatorInfo
     {
-
-    
-
-
-         public static Dictionary<ExpressionType, string> OperatorMatches = MakeOperatorTable();
+        public static Dictionary<ExpressionType, string> OperatorMatches = MakeOperatorTable();
 
         private static Dictionary<ExpressionType, string> MakeOperatorTable()
         {
             var res = new Dictionary<ExpressionType, string>();
-
-
 
             // unary ExpressionType as defined in Partition I Architecture 9.3.1:
 
@@ -40,8 +32,6 @@ namespace ServerRPC
             res[ExpressionType.OnesComplement] = "op_OnesComplement"; // ~
 
             //res.Add(PointerDereference,  "op_PointerDereference",        null);             // * (unary)
-
-
 
             // binary ExpressionType as defined in Partition I Architecture 9.3.2:
 
@@ -69,21 +59,21 @@ namespace ServerRPC
 
             res[ExpressionType.RightShift] = "op_RightShift";     // >>
 
-            res[ExpressionType.Equal] = "op_Equality";         // ==   
+            res[ExpressionType.Equal] = "op_Equality";         // ==
 
             res[ExpressionType.GreaterThan] = "op_GreaterThan";    // >
 
             res[ExpressionType.LessThan] = "op_LessThan";       // <
 
-            res[ExpressionType.NotEqual] = "op_Inequality";      // != 
+            res[ExpressionType.NotEqual] = "op_Inequality";      // !=
 
             res[ExpressionType.GreaterThanOrEqual] = "op_GreaterThanOrEqual";        // >=
 
             res[ExpressionType.LessThanOrEqual] = "op_LessThanOrEqual";        // <=
 
-            res[ExpressionType.MultiplyAssign] =  "op_MultiplicationAssignment";       // *=
+            res[ExpressionType.MultiplyAssign] = "op_MultiplicationAssignment";       // *=
 
-            res[ExpressionType.SubtractAssign] =  "op_SubtractionAssignment";       // -=
+            res[ExpressionType.SubtractAssign] = "op_SubtractionAssignment";       // -=
 
             res[ExpressionType.ExclusiveOrAssign] = "op_ExclusiveOrAssignment";            // ^=
 
@@ -93,19 +83,15 @@ namespace ServerRPC
 
             res[ExpressionType.ModuloAssign] = "op_ModulusAssignment";            // %=
 
-            res[ExpressionType.AddAssign] = "op_AdditionAssignment";            // += 
+            res[ExpressionType.AddAssign] = "op_AdditionAssignment";            // +=
 
             res[ExpressionType.AndAssign] = "op_BitwiseAndAssignment";     // &=
 
-            res[ExpressionType.OrAssign] =   "op_BitwiseOrAssignment";      // |=
+            res[ExpressionType.OrAssign] = "op_BitwiseOrAssignment";      // |=
 
             res[ExpressionType.DivideAssign] = "op_DivisionAssignment";         // /=
 
-
-
             return res;
-
         }
-
     }
 }

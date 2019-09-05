@@ -1,18 +1,18 @@
 ﻿using System;
 
-class Program
+internal class Program
 {
-    static void Main(string[] args)
+    private static void Main(string[] args)
     {
         Console.WriteLine("Hello Server!");
-    //    Console.ReadLine();
+        //    Console.ReadLine();
         int port = 6891;
-        if (args.Length>0)
+        if (args.Length > 0)
         {
             port = int.Parse(args[0]);
         }
 
-        Console.WriteLine("Port="+port);
+        Console.WriteLine("Port=" + port);
 
         var server = new ServerRPC.TCPConnector();
         server.Open(port);

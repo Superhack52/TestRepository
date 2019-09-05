@@ -1,14 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Net;
-using System.Net.Sockets;
-using System.Threading.Tasks;
-using System.IO;
-using System.Reflection;
-using System.Linq.Expressions;
-namespace ServerRPC
+﻿namespace ServerRPC
 {
+    using NetObjectToNative;
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Linq.Expressions;
+    using System.Net;
+    using System.Net.Sockets;
+    using System.Reflection;
+    using System.Threading.Tasks;
+
     public enum CallMethod : byte
     {
         CallFunc = 0,
@@ -25,118 +26,94 @@ namespace ServerRPC
         IteratorNext,
         DeleteObjects,
         CloseServer
-
     }
-
 
     public class TcpAsyncCallBack
     {
-        public IPEndPoint endPoint;
-        Guid Key;
-        internal TcpAsyncCallBack(Guid Key,IPAddress adress, int Port)
+        public IPEndPoint EndPoint;
+        private Guid _key;
+
+        internal TcpAsyncCallBack(Guid key, IPAddress address, int port)
         {
+            EndPoint = new IPEndPoint(address, port);
+            _key = key;
+        }
 
-            endPoint= new IPEndPoint(adress, Port);
-            this.Key = Key;
-           }
-
-
-        void SendStream(MemoryStream stream)
+        private void SendStream(MemoryStream stream)
         {
-
             using (var client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
             {
-                client.Connect(endPoint);
-                //      client.NoDelay = true;
+                client.Connect(EndPoint);
 
                 using (var ns = new NetworkStream(client))
                 {
                     stream.Position = 0;
                     ns.Write(BitConverter.GetBytes((Int32)stream.Length), 0, 4);
                     stream.CopyTo(ns);
-
-
                 }
-
             }
         }
 
-
-        internal void SendAsyncMessage(bool Successfully, object Result)
+        internal void SendAsyncMessage(bool successfully, object result)
         {
             MemoryStream stream = new MemoryStream();
             var bw = new BinaryWriter(stream);
             bw.Write((byte)0);
-            bw.Write(Key.ToByteArray());
-            bw.Write(Successfully);
-            WorkWhithVariant.WriteObject(NetObjectToNative.AutoWrap.WrapObject(Result), bw);
+            bw.Write(_key.ToByteArray());
+            bw.Write(successfully);
+            WorkWithVariant.WriteObject(AutoWrap.WrapObject(result), bw);
             bw.Flush();
 
             SendStream(stream);
+        }
 
-        }    
-       
-
-
-    internal void SendEvent(Guid EventKey, object Result)
-    {
-        MemoryStream stream = new MemoryStream();
-        var bw = new BinaryWriter(stream);
-        bw.Write((byte)1);
-        bw.Write(EventKey.ToByteArray());
-        WorkWhithVariant.WriteObject(NetObjectToNative.AutoWrap.WrapObject(Result), bw);
-        bw.Flush();
+        internal void SendEvent(Guid eventKey, object result)
+        {
+            MemoryStream stream = new MemoryStream();
+            var bw = new BinaryWriter(stream);
+            bw.Write((byte)1);
+            bw.Write(eventKey.ToByteArray());
+            WorkWithVariant.WriteObject(AutoWrap.WrapObject(result), bw);
+            bw.Flush();
 
             SendStream(stream);
         }
-}
+    }
 
-public class TCPConnector
+    public class TCPConnector
     {
-
-        TcpListener Server;
+        private TcpListener _server;
         public readonly TaskCompletionSource<int> WaitIsRunning = new TaskCompletionSource<int>();
         // Будем записывать ошибки в файл
         // Нужно прописать в зависимости "System.Diagnostics.TextWriterTraceListener"
         // Файл будет рядом с этой DLL
 
         // Устанавливаем флаг при закрытии
-        bool IsClosed = false;
+        private bool _isClosed;
+
         // Клиент для отпраки сообщений на сервер
-
-        public TCPConnector()
-        {
-
-
-        }
 
         // Записываем ошибку a файл и сообщаем об ошибке в 1С
 
-
-
         // Откроем порт и количество слушющих задач которое обычно равно подсоединенным устройствам
         // Нужно учитывть, что 1С обрабатывает все события последовательно ставя события в очередь
-        public void Open(int НомерПорта = 6891, int КоличествоСлушателей = 15)
+        public void Open(int portNumber = 6891, int listenerCount = 15)
         {
-            IsClosed = false;
+            _isClosed = false;
 
-            IPEndPoint ipEndpoint = new IPEndPoint(IPAddress.Any, НомерПорта);
-            Server = new TcpListener(ipEndpoint);
-            Server.Start();
+            IPEndPoint ipEndpoint = new IPEndPoint(IPAddress.Any, portNumber);
+            _server = new TcpListener(ipEndpoint);
+            _server.Start();
 
             // Создадим задачи для прослушивания порта
             //При подключении клиента запустим метод ОбработкаСоединения
             // Подсмотрено здесь https://github.com/imatitya/netcorersi/blob/master/src/NETCoreRemoveServices.Core/Hosting/TcpServerListener.cs
-            for (int i = 0; i < КоличествоСлушателей; i++)
-                Server.AcceptTcpClientAsync().ContinueWith(OnConnect);
-
+            for (int i = 0; i < listenerCount; i++) _server.AcceptTcpClientAsync().ContinueWith(OnConnect);
         }
-
 
         // Метод для обработки сообщения от клиента
         private void OnConnect(Task<TcpClient> task)
         {
-
             if (task.IsFaulted || task.IsCanceled)
             {
                 // Скорее всего вызвано  Server.Stop();
@@ -147,27 +124,22 @@ public class TCPConnector
             TcpClient client = task.Result;
 
             // И вызовем метод для обработки данных
-            // 
+            //
             ExecuteMethodKeepConnection(client);
 
             // Если Server не закрыт то запускаем нового слушателя
-            if (!IsClosed)
-                Server.AcceptTcpClientAsync().ContinueWith(OnConnect);
-
+            if (!_isClosed) _server.AcceptTcpClientAsync().ContinueWith(OnConnect);
         }
-
-
-
 
         private void RunMethod(NetworkStream ns, MemoryStream ms, IPAddress adress)
         {
             using (BinaryReader br = new BinaryReader(ms))
             {
                 var msRes = new MemoryStream();
-                using(BinaryWriter bw= new BinaryWriter(msRes))
-                { 
+                using (BinaryWriter bw = new BinaryWriter(msRes))
+                {
                     var cm = (CallMethod)br.ReadByte();
-                   
+
                     switch (cm)
                     {
                         case CallMethod.CallFunc: CallAsFunc(br, bw); break;
@@ -193,26 +165,22 @@ public class TCPConnector
                                 WaitIsRunning.SetResult(1);
                                 return;
                             }
-                            
                     }
 
                     bw.Flush();
                     SetResult(msRes, ns);
                 }
-
             }
         }
 
-        
         private void ExecuteMethod(TcpClient client)
         {
-            var adress=((IPEndPoint)client.Client.RemoteEndPoint).Address;
-        //    client.Client.NoDelay = true;
+            var address = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+            //    client.Client.NoDelay = true;
             using (NetworkStream ns = client.GetStream())
             {
-
                 // Получим данные с клиента и на основании этих данных
-                //Создадим ДанныеДляКлиета1С котрый кроме данных содержит 
+                //Создадим ДанныеДляКлиета1С котрый кроме данных содержит
                 //TcpClient для отправки ответа
                 using (var br = new BinaryReader(ns))
                 {
@@ -220,24 +188,19 @@ public class TCPConnector
 
                     var res = br.ReadBytes(streamSize);
 
-                    var ms = new MemoryStream(res);
-                    ms.Position = 0;
-                    RunMethod(ns, ms, adress);
+                    var ms = new MemoryStream(res) { Position = 0 };
+                    RunMethod(ns, ms, address);
                 }
-
-
-
             }
-
         }
 
-        private static byte[] GetByteArrayFromStream(NetworkStream ns, int Length)
+        private static byte[] GetByteArrayFromStream(NetworkStream ns, int length)
         {
-            byte[] result = new byte[Length];
-            int ReadBytes = 0;
-            while (Length > ReadBytes)
+            byte[] result = new byte[length];
+            int readBytes = 0;
+            while (length > readBytes)
             {
-                ReadBytes += ns.Read(result, ReadBytes, Length - ReadBytes);
+                readBytes += ns.Read(result, readBytes, length - readBytes);
             }
 
             return result;
@@ -245,529 +208,393 @@ public class TCPConnector
 
         private void ExecuteMethodKeepConnection(TcpClient client)
         {
-
             try
             {
                 NetworkStream ns = client.GetStream();
-                var adress = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+                var address = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
 
-                var buffer = new byte[4];
                 while (true)
                 {
-                   // переделать на  ns.ReadAsync;
+                    // переделать на  ns.ReadAsync;
                     var NotKeepConnection = ns.ReadByte();
-                    buffer = GetByteArrayFromStream(ns, 4);
-                    var streamSize = BitConverter.ToInt32(buffer, 0);
+                    var streamSize = BitConverter.ToInt32(GetByteArrayFromStream(ns, 4), 0);
 
                     if (streamSize > 0)
-                    { 
-                    var res = GetByteArrayFromStream(ns, streamSize);
-
-                    var ms = new MemoryStream(res);
-                    ms.Position = 0;
-                    RunMethod(ns, ms, adress);
-                }
-                    //ns.Write(BitConverter.GetBytes(streamSize), 0, 4);
-                    //ns.Write(res, 0, res.Length);
-                    //ns.Flush();
+                    {
+                        var ms = new MemoryStream(GetByteArrayFromStream(ns, streamSize));
+                        ms.Position = 0;
+                        RunMethod(ns, ms, address);
+                    }
 
                     if (NotKeepConnection == 1)
                     {
-
                         client.Dispose();
                         return;
                     }
                 }
             }
-            catch (System.IO.IOException)
+            catch (IOException)
             {
                 client.Dispose();
-                return;
             }
-
-
         }
 
         // Закроем ресурсы
         public void Close()
         {
-            if (Server != null)
+            if (_server != null)
             {
-                IsClosed = true;
-                Server.Stop();
-                Server = null;
-
-
+                _isClosed = true;
+                _server.Stop();
+                _server = null;
             }
-
-
         }
 
-        static void  SetError(string ErrorStr,BinaryWriter bw)
+        private static void SetError(string errorStr, BinaryWriter bw)
         {
-         
-                bw.Write(false);
-                WorkWhithVariant.WriteObject(ErrorStr, bw);
+            bw.Write(false);
+            WorkWithVariant.WriteObject(errorStr, bw);
         }
 
-        static void SetResult(MemoryStream ms, NetworkStream ns)
+        private static void SetResult(MemoryStream ms, NetworkStream ns)
         {
             ms.Position = 0;
             ns.Write(BitConverter.GetBytes((Int32)ms.Length), 0, 4);
             ms.CopyTo(ns);
             ns.Flush();
-
-
         }
 
         public static object[] GetArrayParams(BinaryReader br)
         {
-
             int size = br.ReadInt32();
             var res = new object[size];
 
-            for(int i=0; i< res.Length; i++)
+            for (int i = 0; i < res.Length; i++)
             {
-                res[i] = WorkWhithVariant.GetObject(br);
-
-
+                res[i] = WorkWithVariant.GetObject(br);
             }
 
             return res;
-
-
         }
 
-        static bool  GetAW(BinaryReader br, BinaryWriter bw, out NetObjectToNative.AutoWrap  AW )
+        private static bool GetAW(BinaryReader br, BinaryWriter bw, out AutoWrap autoWrap)
         {
+            var target = br.ReadInt32();
 
-            var Target = br.ReadInt32();
+            autoWrap = AutoWrap.ObjectsList.GetValue(target);
 
-            AW = NetObjectToNative.AutoWrap.ObjectsList.GetValue(Target);
-
-            if (AW == null)
+            if (autoWrap == null)
             {
                 SetError("Не найдена ссылка на объект", bw);
-
                 return false;
             }
 
             return true;
         }
-
 
         public static void CallAsDelegate(BinaryReader br, BinaryWriter bw)
         {
-           object result = null;
-            NetObjectToNative.AutoWrap AW;
-            if (!GetAW(br, bw, out AW))
+            object result;
+            if (!GetAW(br, bw, out var autoWrap))
                 return;
 
             var args = GetArrayParams(br);
-            string Error;
-           
             try
             {
-
-                var del = (Delegate)AW.O;
+                var del = (Delegate)autoWrap.Object;
                 result = del.DynamicInvoke(args);
-
             }
             catch (Exception e)
             {
-                Error = NetObjectToNative.AutoWrap.GetExeptionString($"Ошибка вызова делегата Target = ", "", e);
-                SetError(Error, bw);
+                SetError(AutoWrap.GetExceptionString($"Ошибка вызова делегата Target = ", "", e), bw);
                 return;
-             
             }
-
 
             bw.Write(true);
-            WorkWhithVariant.WriteObject(NetObjectToNative.AutoWrap.WrapObject(result), bw);
-
+            WorkWithVariant.WriteObject(AutoWrap.WrapObject(result), bw);
         }
 
-
-        static void WriteChandeParams(BinaryWriter bw, object[] args,List<int> ChageParams)
+        private static void WriteChangeParams(BinaryWriter bw, object[] args, List<int> changeParameters)
         {
-            bw.Write(ChageParams.Count);
+            bw.Write(changeParameters.Count);
 
-            foreach (var i in ChageParams)
+            foreach (var i in changeParameters)
             {
                 bw.Write(i);
-                WorkWhithVariant.WriteObject(NetObjectToNative.AutoWrap.WrapObject(args[i]), bw);
-
+                WorkWithVariant.WriteObject(AutoWrap.WrapObject(args[i]), bw);
             }
-
         }
-        public static bool CallAsFuncAll(BinaryReader br, BinaryWriter bw, out object result, bool WriteResult)
+
+        public static bool CallAsFuncAll(BinaryReader br, BinaryWriter bw, out object result, bool writeResult)
         {
             result = null;
-            NetObjectToNative.AutoWrap AW;
-            if (!GetAW(br, bw, out AW))
-                return false;
+            if (!GetAW(br, bw, out var autoWrap)) return false;
 
-
-
-            string MethodName = br.ReadString();
+            string methodName = br.ReadString();
             var args = GetArrayParams(br);
 
-            string Error;
-            List<int> ChageParams = new List<int>();
+            List<int> changeParameters = new List<int>();
 
-           
-            var res = AW.TryInvokeMember(MethodName, args, out result, ChageParams, out Error);
+            var res = autoWrap.TryInvokeMember(methodName, args, out result, changeParameters, out var error);
             if (!res)
             {
-                SetError(Error, bw);
+                SetError(error, bw);
                 return false;
             }
 
-           if (WriteResult)
+            if (writeResult)
             {
                 bw.Write(true);
-                WorkWhithVariant.WriteObject(NetObjectToNative.AutoWrap.WrapObject(result), bw);
-                WriteChandeParams(bw, args, ChageParams);
-
-
+                WorkWithVariant.WriteObject(AutoWrap.WrapObject(result), bw);
+                WriteChangeParams(bw, args, changeParameters);
             }
             return true;
         }
+
         public static void CallAsFunc(BinaryReader br, BinaryWriter bw)
         {
-
-            object result = null;
-            CallAsFuncAll(br, bw, out result, true);
-                
- 
+            CallAsFuncAll(br, bw, out var result, true);
         }
 
-
-        public static bool CallAsGenericFuncAll(BinaryReader br, BinaryWriter bw, out object result, bool WriteResult)
+        public static bool CallAsGenericFuncAll(BinaryReader br, BinaryWriter bw, out object result, bool writeResult)
         {
-            result = null;
-            NetObjectToNative.AutoWrap AW;
-            if (!GetAW(br, bw, out AW))
-                return false;
+            result = null; ;
+            if (!GetAW(br, bw, out var autoWrap)) return false;
 
-
-
-
-            string MethodName = br.ReadString();
-            var arguments= GetArrayParams(br);
+            string methodName = br.ReadString();
+            var arguments = GetArrayParams(br);
             var Params = GetArrayParams(br);
-           
 
-            // Можно параметры передавать ввиде типов и строк 
-            var GenericArguments = new Type[arguments.Length];
-            for (int i = 0; i < GenericArguments.Length; i++)
-                GenericArguments[i] = NetObjectToNative.NetObjectToNative.FindTypeForCreateObject(arguments[i]);
+            // Можно параметры передавать ввиде типов и строк
+            var genericArguments = new Type[arguments.Length];
+            for (int i = 0; i < genericArguments.Length; i++)
+                genericArguments[i] = NetObjectToNative.FindTypeForCreateObject(arguments[i]);
 
             result = null;
-            var TypesOfParameters = NetObjectToNative.AllMethodsForName.GetTypesParameters(Params);
-            var res = NetObjectToNative.InformationOnTheTypes.FindGenericMethodsWithGenericArguments(AW.T, AW.IsType, MethodName, GenericArguments, TypesOfParameters);
+            var typesOfParameters = AllMethodsForName.GetTypesParameters(Params);
+            var res = InformationOnTheTypes.FindGenericMethodsWithGenericArguments(
+                autoWrap.Type,
+                autoWrap.IsType,
+                methodName,
+                genericArguments,
+                typesOfParameters);
 
             if (res == null)
             {
-                SetError("Не найден дженерик метод " + MethodName, bw);
+                SetError("Не найден дженерик метод " + methodName, bw);
                 return false;
             }
 
-
-
             try
             {
-                var CopyParams = new object[Params.Length];
-                Params.CopyTo(CopyParams,0);
+                var copyParams = new object[Params.Length];
+                Params.CopyTo(copyParams, 0);
 
-                var obj = AW.IsType ? null : AW.O;
-                result = res.ExecuteMethod(obj, CopyParams);
+                var obj = autoWrap.IsType ? null : autoWrap.Object;
+                result = res.ExecuteMethod(obj, copyParams);
 
-                var ReturnType = res.Method.ReturnType;
+                var returnType = res.Method.ReturnType;
 
-                if (result != null && ReturnType.GetTypeInfo().IsInterface)
-                    result = new NetObjectToNative.AutoWrap(result, ReturnType);
+                if (result != null && returnType.GetTypeInfo().IsInterface)
+                    result = new AutoWrap(result, returnType);
 
-                if (WriteResult)
+                if (writeResult)
                 {
                     bw.Write(true);
-                    WorkWhithVariant.WriteObject(NetObjectToNative.AutoWrap.WrapObject(result), bw);
-
-                    var ChageParams = NetObjectToNative.AutoWrap.GetChangeParams(Params, CopyParams);
-                    WriteChandeParams(bw, CopyParams, ChageParams);
+                    WorkWithVariant.WriteObject(AutoWrap.WrapObject(result), bw);
+                    WriteChangeParams(bw, copyParams, AutoWrap.GetChangeParams(Params, copyParams));
                 }
-
             }
-
             catch (Exception e)
             {
-                var Error = NetObjectToNative.AutoWrap.GetExeptionString($"Ошибка вызова Дженерик метода {MethodName}", "", e);
-                SetError(Error, bw);
+                SetError(AutoWrap.GetExceptionString($"Ошибка вызова Дженерик метода {methodName}", "", e), bw);
                 return false;
             }
 
             return true;
         }
 
-
         public static void CallAsGenericFunc(BinaryReader br, BinaryWriter bw)
         {
-            object result = null;
-            CallAsGenericFuncAll(br, bw, out result, true);
-       
+            CallAsGenericFuncAll(br, bw, out var result, true);
         }
-        public static void CallAsyncFunc(BinaryReader br, BinaryWriter bw, IPAddress adress)
-        {
-            object result = null;
-            if (!CallAsFuncAll(br, bw, out result, false))
-                return;
 
+        public static void CallAsyncFunc(BinaryReader br, BinaryWriter bw, IPAddress address)
+        {
+            if (!CallAsFuncAll(br, bw, out var result, false)) return;
             try
             {
-               
-
-                var TaskId = new Guid(br.ReadBytes(16));
+                var taskId = new Guid(br.ReadBytes(16));
                 var port = br.ReadInt32();
-                var TI = result.GetType().GetTypeInfo();
+                var typeInfo = result.GetType().GetTypeInfo();
 
-                var ac = new TcpAsyncCallBack(TaskId,adress, port);
-                var callBack = new Action<bool, object>(ac.SendAsyncMessage);
-                if (!TI.IsGenericType)
+                var asyncCallBack = new TcpAsyncCallBack(taskId, address, port);
+                var callBack = new Action<bool, object>(asyncCallBack.SendAsyncMessage);
+                if (!typeInfo.IsGenericType)
                 {
-                    // SendMessage(byte TypeResult, Guid Key, bool Successfully, object Result)
-                    NetObjectToNative.AsyncRuner.TaskExecute((Task)result, callBack);
+                    AsyncRunner.TaskExecute((Task)result, callBack);
                     return;
                 }
 
-                var args = new object[] {result, callBack };
-                var method =NetObjectToNative.InformationOnTheTypes.FindMethod(typeof(NetObjectToNative.AsyncRuner), true, "Execute", args);
+                var args = new[] { result, callBack };
+                var method = InformationOnTheTypes.FindMethod(typeof(AsyncRunner), true, "Execute", args);
 
                 if (method == null)
                 {
                     SetError("Неверный результат", bw);
                     return;
                 }
-                else
-                {
-                    method.ExecuteMethod(null, args);
-                }
+
+                method.ExecuteMethod(null, args);
             }
             catch (Exception e)
             {
-                var Error = NetObjectToNative.AutoWrap.GetExeptionString("Ошибка вызова делегата", "", e);
-                SetError(Error, bw);
-                return ;
+                SetError(AutoWrap.GetExceptionString("Ошибка вызова делегата", "", e), bw);
+                return;
             }
 
             bw.Write(true);
-            WorkWhithVariant.WriteObject(null, bw);
-
+            WorkWithVariant.WriteObject(null, bw);
         }
 
-
-        public static void GetWrapperForObjectWithEvents(BinaryReader br, BinaryWriter bw, IPAddress adress)
+        public static void GetWrapperForObjectWithEvents(BinaryReader br, BinaryWriter bw, IPAddress address)
         {
             try
             {
-                object result = null;
-                NetObjectToNative.AutoWrap AW;
-                if (!GetAW(br, bw, out AW))
-                    return;
+                if (!GetAW(br, bw, out var autoWrap)) return;
 
-                Type type = AW.T;
-                Type genType = typeof(NetObjectToNative.WrapperForEvents<>);
-                Type constructed = genType.MakeGenericType(new Type[] { type });
-                var propertyName = "WrapperCreater";
+                Type type = autoWrap.Type;
+                Type genType = typeof(WrapperForEvents<>);
+                Type constructed = genType.MakeGenericType(type);
+                var propertyName = "WrapperCreator";
 
                 var fi = constructed.GetField(propertyName);
                 Delegate func = (Delegate)fi.GetValue(null);
 
-
                 //var mi = constructed.GetMethod("СоздатьОбертку");
                 // Delegate функция = (Delegate)mi.Invoke(null,null);
 
-                var TaskId = new Guid();
+                var taskId = new Guid();
                 var port = br.ReadInt32();
-                
-                var ac = new TcpAsyncCallBack(TaskId, adress, port);
+
+                var ac = new TcpAsyncCallBack(taskId, address, port);
                 var callBack = new Action<Guid, object>(ac.SendEvent);
-                result = func.DynamicInvoke(callBack, AW.O);
 
-               bw.Write(true);
-                WorkWhithVariant.WriteObject(NetObjectToNative.AutoWrap.WrapObject(result), bw);
-
+                bw.Write(true);
+                WorkWithVariant.WriteObject(AutoWrap.WrapObject(func.DynamicInvoke(callBack, autoWrap.Object)), bw);
             }
             catch (Exception e)
             {
-                var Error = NetObjectToNative.AutoWrap.GetExeptionString("Ошибка создания оберки событий", "", e);
-                SetError(Error, bw);
-                
+                SetError(AutoWrap.GetExceptionString("Ошибка создания оберки событий", "", e), bw);
             }
-          
         }
 
         public static void GetPropVal(BinaryReader br, BinaryWriter bw)
         {
-
-
-            NetObjectToNative.AutoWrap AW;
-            if (!GetAW(br, bw, out AW))
-                return;
-
-
-
+            if (!GetAW(br, bw, out var autoWrap)) return;
 
             string propertyName = br.ReadString();
-
-            object result = null;
-            string Error = null;
-            var res = AW.TryGetMember(propertyName, out result, out Error);
+            var res = autoWrap.TryGetMember(propertyName, out var result, out var error);
             if (!res)
             {
-                SetError(Error, bw);
+                SetError(error, bw);
                 return;
             }
 
             bw.Write(true);
-            WorkWhithVariant.WriteObject(NetObjectToNative.AutoWrap.WrapObject(result), bw);
+            WorkWithVariant.WriteObject(AutoWrap.WrapObject(result), bw);
         }
 
         public static void SetPropVal(BinaryReader br, BinaryWriter bw)
         {
+            if (!GetAW(br, bw, out var autoWrap)) return;
 
-            NetObjectToNative.AutoWrap AW;
-            if (!GetAW(br, bw, out AW))
-                return;
-   
+            string propertyName = br.ReadString();
+            object result = WorkWithVariant.GetObject(br);
+            var res = autoWrap.TrySetMember(propertyName, result, out var error);
 
-        string propertyName = br.ReadString();
-
-            string Error = null;
-            object result= WorkWhithVariant.GetObject(br);
-            var res = AW.TrySetMember(propertyName, result, out Error);
-
-            if (!res)
-              SetError(Error, bw);
+            if (!res) SetError(error, bw);
             else
             {
                 bw.Write(true);
-                WorkWhithVariant.WriteObject(null, bw);
-
+                WorkWithVariant.WriteObject(null, bw);
             }
-
-            
-           
         }
-
-
 
         public static void SetIndex(BinaryReader br, BinaryWriter bw)
         {
-
-            NetObjectToNative.AutoWrap AW;
-            if (!GetAW(br, bw, out AW))
-                return;
-
+            if (!GetAW(br, bw, out var autoWrap)) return;
 
             var indexes = GetArrayParams(br);
             object[] Params = new object[indexes.Length + 1];
-            var value = WorkWhithVariant.GetObject(br);
-            string MetodName= "set_Item";
+            var value = WorkWithVariant.GetObject(br);
+            string methodName = "set_Item";
 
-            if (typeof(Array).IsAssignableFrom(AW.T))
+            if (typeof(Array).IsAssignableFrom(autoWrap.Type))
             {
-                MetodName = "SetValue";
+                methodName = "SetValue";
                 indexes.CopyTo(Params, 1);
                 Params[0] = value;
             }
             else
             {
                 indexes.CopyTo(Params, 0);
-                Params[Params.Length-1] = value;
-
+                Params[Params.Length - 1] = value;
             }
-            string Error = null;
-            List<int> ChangeParams = new List<int>();
 
+            var changeParams = new List<int>();
+            var res = autoWrap.TryInvokeMember(methodName, Params, out var result, changeParams, out var error);
 
-            object result;
-            var res = AW.TryInvokeMember(MetodName, Params, out result, ChangeParams, out Error);
-            
-            if (!res)
-                SetError(Error, bw);
+            if (!res) SetError(error, bw);
             else
             {
                 bw.Write(true);
-                WorkWhithVariant.WriteObject(null, bw);
-
+                WorkWithVariant.WriteObject(null, bw);
             }
-
         }
 
         public static void GetIndex(BinaryReader br, BinaryWriter bw)
         {
+            if (!GetAW(br, bw, out var autoWrap)) return;
 
-            NetObjectToNative.AutoWrap AW;
-            if (!GetAW(br, bw, out AW))
-                return;
+            var parameters = GetArrayParams(br);
+            string methodName = "get_Item";
+            if (typeof(Array).IsAssignableFrom(autoWrap.Type)) methodName = "GetValue";
 
+            var changeParams = new List<int>();
+            var res = autoWrap.TryInvokeMember(methodName, parameters, out var result, changeParams, out var error);
 
-            var Params = GetArrayParams(br);
-            string MetodName = "get_Item";
-
-            if (typeof(Array).IsAssignableFrom(AW.T))
-                MetodName = "GetValue";
-
-            string Error = null;
-            List<int> ChangeParams = new List<int>();
-
-
-            object result;
-            var res = AW.TryInvokeMember(MetodName, Params, out result, ChangeParams, out Error);
-
-            if (!res)
-                SetError(Error, bw);
+            if (!res) SetError(error, bw);
             else
             {
                 bw.Write(true);
-                WorkWhithVariant.WriteObject(NetObjectToNative.AutoWrap.WrapObject(result), bw);
-
+                WorkWithVariant.WriteObject(AutoWrap.WrapObject(result), bw);
             }
-
         }
 
         public static void IteratorNext(BinaryReader br, BinaryWriter bw)
         {
-
-            NetObjectToNative.AutoWrap AW;
-            if (!GetAW(br, bw, out AW))
-                return;
+            if (!GetAW(br, bw, out var autoWrap)) return;
 
             try
             {
-                var Enum =AW.O;
-                var Iter = (System.Collections.IEnumerator)AW.O;
-
-                var res = Iter.MoveNext();
+                var enumerator = (System.Collections.IEnumerator)autoWrap.Object;
+                var res = enumerator.MoveNext();
                 bw.Write(true);
                 if (!res)
                 {
-                    NetObjectToNative.AutoWrap.ObjectsList.RemoveKey(AW.IndexInStorage);
+                    AutoWrap.ObjectsList.RemoveKey(autoWrap.IndexInStorage);
                     bw.Write(false);
                     return;
-
                 }
 
                 bw.Write(true);
-                WorkWhithVariant.WriteObject(NetObjectToNative.AutoWrap.WrapObject(Iter.Current), bw);
-           
+                WorkWithVariant.WriteObject(AutoWrap.WrapObject(enumerator.Current), bw);
             }
             catch (Exception e)
             {
-                var Error = NetObjectToNative.AutoWrap.GetExeptionString("Ошибка итератора", "", e);
-                SetError(Error, bw);
+                SetError(AutoWrap.GetExceptionString("Ошибка итератора", "", e), bw);
             }
-
         }
 
         public static void DeleteObjects(BinaryReader br, BinaryWriter bw)
@@ -775,102 +602,74 @@ public class TCPConnector
             try
             {
                 int count = br.ReadInt32();
-            for(int i=0; i<count; i++)
-            {
-                int Target= br.ReadInt32();
-                NetObjectToNative.AutoWrap.ObjectsList.RemoveKey(Target);
-            }
+                for (int i = 0; i < count; i++)
+                {
+                    int target = br.ReadInt32();
+                    AutoWrap.ObjectsList.RemoveKey(target);
+                }
                 bw.Write(true);
-                WorkWhithVariant.WriteObject(null, bw);
+                WorkWithVariant.WriteObject(null, bw);
             }
             catch (Exception e)
             {
-                var Error = NetObjectToNative.AutoWrap.GetExeptionString("Ошибка удаления объектов", "", e);
-                SetError(Error, bw);
+                SetError(AutoWrap.GetExceptionString("Ошибка удаления объектов", "", e), bw);
             }
-
         }
 
-
-       static void CallStaticMetod(BinaryWriter bw, Type T, string MethodName, object[] args)
+        private static void CallStaticMethod(BinaryWriter bw, Type T, string methodName, object[] args)
         {
             try
             {
-                var Method = NetObjectToNative.InformationOnTheTypes.FindMethod(T, true, MethodName, args);
+                var method = InformationOnTheTypes.FindMethod(T, true, methodName, args);
 
-            if (Method == null)
-            {
-                SetError($"Нет найден метод  {Method} для типа {T}", bw);
-                return;
+                if (method == null)
+                {
+                    SetError($"Нет найден метод  {method} для типа {T}", bw);
+                    return;
+                }
+
+                var obj = method.ExecuteMethod(null, args);
+
+                bw.Write(true);
+                WorkWithVariant.WriteObject(AutoWrap.WrapObject(obj), bw);
+                bw.Write((int)0);
             }
-
-            var obj = Method.ExecuteMethod(null, args);
-
-            bw.Write(true);
-            WorkWhithVariant.WriteObject(NetObjectToNative.AutoWrap.WrapObject(obj), bw);
-            bw.Write((int)0);
-        }
             catch (Exception e)
             {
-                var Error = NetObjectToNative.AutoWrap.GetExeptionString("Ошибка бинарной операции ", "", e);
-                SetError(Error, bw);
-    }
+                SetError(AutoWrap.GetExceptionString("Ошибка бинарной операции ", "", e), bw);
+            }
+        }
 
-}
         public static void CallBinaryOperation(BinaryReader br, BinaryWriter bw)
         {
-            NetObjectToNative.AutoWrap AW;
-            if (!GetAW(br, bw, out AW))
-                return;
+            if (!GetAW(br, bw, out var autoWrap)) return;
+            var expressionType = (ExpressionType)br.ReadByte();
 
-
-
-
-            ExpressionType et= (ExpressionType)br.ReadByte();
-
-            string MethodName;
-
-            if (!OperatorInfo.OperatorMatches.TryGetValue(et, out MethodName))
+            if (!OperatorInfo.OperatorMatches.TryGetValue(expressionType, out var methodName))
             {
-
-                SetError($"Нет соответствия {et} имени метода", bw);
+                SetError($"Нет соответствия {expressionType} имени метода", bw);
                 return;
-
             }
 
-            object param2= WorkWhithVariant.GetObject(br);
-            var args = new object[] { AW.O, param2 };
+            object param2 = WorkWithVariant.GetObject(br);
+            var args = new[] { autoWrap.Object, param2 };
 
-            CallStaticMetod(bw, AW.T,MethodName, args);
-
+            CallStaticMethod(bw, autoWrap.Type, methodName, args);
         }
 
         public static void CallUnaryOperation(BinaryReader br, BinaryWriter bw)
         {
-            NetObjectToNative.AutoWrap AW;
-            if (!GetAW(br, bw, out AW))
-                return;
+            if (!GetAW(br, bw, out var autoWrap)) return;
 
-
-
-
-            ExpressionType et = (ExpressionType)br.ReadByte();
-
-            string MethodName;
-
-            if (!OperatorInfo.OperatorMatches.TryGetValue(et, out MethodName))
+            var expressionType = (ExpressionType)br.ReadByte();
+            if (!OperatorInfo.OperatorMatches.TryGetValue(expressionType, out var methodName))
             {
-
-                SetError($"Нет соответствия {et} имени метода", bw);
+                SetError($"Нет соответствия {expressionType} имени метода", bw);
                 return;
-
             }
 
-                    var args = new object[] { AW.O};
-
-            CallStaticMetod(bw, AW.T, MethodName, args);
-
+            var args = new[] { autoWrap.Object };
+            CallStaticMethod(bw, autoWrap.Type, methodName, args);
         }
-
     }
 }

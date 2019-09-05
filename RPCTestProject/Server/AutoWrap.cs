@@ -1,135 +1,102 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Reflection;
-using System.Globalization;
-using System.Runtime.InteropServices;
-using System.IO;
-namespace NetObjectToNative
+﻿namespace NetObjectToNative
 {
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Reflection;
+
     public class AutoWrap
     {
-
-
-       
-
         // Хранилище где будем хранить объекты
-        //Оптимизировано для повторного использования
-        //индексов удаленных из него объектов
+        // Оптимизировано для повторного использования
+        // индексов удаленных из него объектов
         internal static ObjectStorage ObjectsList;
 
-        //Индекс в хранилище объектов
-        //Который будет передаватся клиенту
+        // Индекс в хранилище объектов
+        // Который будет передаватся клиенту
         internal int IndexInStorage;
 
         // ссылка на объект
-        protected internal object O = null;
-        // Ссылка на тип. Нужна для скорости и для использования типа интерфейса
-        protected internal Type T = null;
+        protected internal object Object;
 
-       
+        // Ссылка на тип. Нужна для скорости и для использования типа интерфейса
+        protected internal Type Type;
 
         // Тип нужен для создания объектов, вызва статических методов
         internal bool IsType;
-        // Для перечислений нужно вызывать Enum.Parse(T, name);
+
+        // Для перечислений нужно вызывать Enum.Parse(Type, name);
         internal bool IsEnum;
 
-
         // Объекты реализующие интерфейс  System.Dynamic.IDynamicMetaObjectProvider
-        // Это ExpandoObject , DinamicObject, JObject итд 
+        // Это ExpandoObject , DinamicObject, JObject итд
 
         internal bool IsDynamic;
 
         // Полледняя ошибка. Нужно удалить оставил для совместимости
-        internal static Exception LastError = null;
+        internal static Exception LastError;
 
         // Директории Microsoft.NETCore.App и текущая директория
         internal static string CoreClrDir, NetObjectToNativeDir;
- 
-       
 
+        private static string GetDirName(Type type)
+        {
+            string codeBase = type.GetTypeInfo().Assembly.Location;
+            UriBuilder uri = new UriBuilder(codeBase);
+            string path = Uri.UnescapeDataString(uri.Path);
+            return Path.GetDirectoryName(path);
+        }
 
-        static string GetDirName(Type type) { 
-        string codeBase = type.GetTypeInfo().Assembly.Location;
-        UriBuilder uri = new UriBuilder(codeBase);
-        string path = Uri.UnescapeDataString(uri.Path);
-         return Path.GetDirectoryName(path);
-            }
         static AutoWrap()
         {
             // В начале установим ссылку на вспомогательный класс
             //Для создания объектов, получения типов итд
             //который будет идти в списке под индексом 0
             ObjectsList = new ObjectStorage();
-            var первый = new AutoWrap(typeof(NetObjectToNative));
-
+            //first to initial
+            new AutoWrap(typeof(NetObjectToNative));
             CoreClrDir = GetDirName(typeof(string));
             NetObjectToNativeDir = GetDirName(typeof(AutoWrap));
         }
 
-
         public AutoWrap(object obj)
         {
-
             IndexInStorage = ObjectsList.Add(this);
-            O = obj;
-            if (O is Type)
+            Object = obj;
+            if (Object is Type type)
             {
-                T = O as Type;
+                Type = type;
                 IsType = true;
             }
             else
             {
-                T = O.GetType();
+                Type = Object.GetType();
                 IsType = false;
-                IsDynamic = O is System.Dynamic.IDynamicMetaObjectProvider;
-                IsEnum = T.GetTypeInfo().IsEnum;
-
-
+                IsDynamic = Object is System.Dynamic.IDynamicMetaObjectProvider;
+                IsEnum = Type.GetTypeInfo().IsEnum;
             }
-
-
-
         }
 
         // Нужен для установки типа интерфейса
         public AutoWrap(object obj, Type type)
         {
             IndexInStorage = ObjectsList.Add(this);
-            O = obj;
-            T = type;
+            Object = obj;
+            Type = type;
             IsType = false;
-            //   ЭтоExpandoObject = O is System.Dynamic.ExpandoObject;
-
+            //   ЭтоExpandoObject = Object is System.Dynamic.ExpandoObject;
         }
-
-        
-
-       
-
 
         public static object GetRalObject(object obj)
         {
-
-
-            if (obj is AutoWrap)
-            {
-                return ((AutoWrap)obj).O;
-            }
-
+            if (obj is AutoWrap wrap) return wrap.Object;
             return obj;
         }
-
-
-
 
         internal static object[] GetArrayRealObjects(object[] args)
         {
             if (args.Length == 0)
                 return args;
-
 
             object[] res = new object[args.Length];
 
@@ -138,161 +105,120 @@ namespace NetObjectToNative
                 res[i] = GetRalObject(args[i]);
             }
 
-
-
             return res;
-
-
-
         }
 
-        internal static void SetChangeInArgs(object[] ОригинальныйМассив, object[] МассивРеальныхОбъектов, List<int> ИзмененныеПараметры)
+        internal static void SetChangeInArgs(object[] originalArray, object[] realObjectsArray, List<int> changedParameters)
         {
-            if (ОригинальныйМассив == МассивРеальныхОбъектов)
-                return;
+            if (originalArray == realObjectsArray) return;
 
-            for (int i = 0; i < ОригинальныйМассив.Length; i++)
+            for (int i = 0; i < originalArray.Length; i++)
             {
+                object obj = originalArray[i];
 
-                object obj = ОригинальныйМассив[i];
-
-                if (obj is AutoWrap)
+                if (obj is AutoWrap wrap)
                 {
-                    AutoWrap элемент = (AutoWrap)obj;
-                    if (!object.Equals(элемент.O, МассивРеальныхОбъектов[i]))
+                    if (!Equals(wrap.Object, realObjectsArray[i]))
                     {
-                        ОригинальныйМассив[i] = МассивРеальныхОбъектов[i];
-                        ИзмененныеПараметры.Add(i);
+                        originalArray[i] = realObjectsArray[i];
+                        changedParameters.Add(i);
                     }
                 }
                 else
                 {
-                    if (!object.Equals(ОригинальныйМассив[i], МассивРеальныхОбъектов[i]))
+                    if (!Equals(originalArray[i], realObjectsArray[i]))
                     {
-                        ОригинальныйМассив[i] = МассивРеальныхОбъектов[i];
-                        ИзмененныеПараметры.Add(i);
+                        originalArray[i] = realObjectsArray[i];
+                        changedParameters.Add(i);
                     }
                 }
             }
-
-
         }
 
-        internal static List<int> GetChangeParams(object[] OrigParams, object[] CopyParams)
+        internal static List<int> GetChangeParams(object[] origParams, object[] copyParams)
         {
+            var changeArrayParams = new List<int>();
+            if (origParams == copyParams)
+                return changeArrayParams;
 
-            List<int> ChangeArrayParams = new List<int>();
-            if (OrigParams == CopyParams)
-                return ChangeArrayParams;
-
-            for (int i = 0; i < OrigParams.Length; i++)
+            for (int i = 0; i < origParams.Length; i++)
             {
-
-                  if (!object.Equals(OrigParams[i], CopyParams[i]))
-                    {
-                        OrigParams[i] = CopyParams[i];
-                        ChangeArrayParams.Add(i);
-                    }
-                
+                if (!Equals(origParams[i], copyParams[i]))
+                {
+                    origParams[i] = copyParams[i];
+                    changeArrayParams.Add(i);
+                }
             }
 
-        return ChangeArrayParams;
-    }
+            return changeArrayParams;
+        }
+
         // Обернем объекты для посылки на сервер
         // Напрямую передаются только числа, строки, DateTime, Guid, byte[]
         public static object WrapObject(object obj)
         {
-
-
-            if (obj == null)
-                return obj;
-
-
-           if (!ServerRPC.WorkWhithVariant.MatchTypes.ContainsKey(obj.GetType()))
-                obj = new AutoWrap(obj);
-           
+            if (obj == null) return null;
+            if (!ServerRPC.WorkWithVariant.MatchTypes.ContainsKey(obj.GetType())) obj = new AutoWrap(obj);
 
             return obj;
         }
 
-
-
-
-
-
-
-
-
         public object InvokeMemberExpandoObject(string name, object[] args)
         {
-
-            return ((Delegate)((IDictionary<string, object>)((System.Dynamic.ExpandoObject)O))[name]).DynamicInvoke(args);
-
+            return ((Delegate)((IDictionary<string, object>)((System.Dynamic.ExpandoObject)Object))[name]).DynamicInvoke(args);
         }
 
-        public static string GetExeptionString(String TypeCall, string name, Exception e)
+        public static string GetExceptionString(String TypeCall, string name, Exception e)
         {
-
             LastError = e;
-            string Ошибка = String.Format("Ошибка в  {0} {1} {2} {3}", TypeCall, name, e.Message, e.Source);
+            string error = $"Ошибка в  {TypeCall} {name} {e.Message} {e.Source}";
+            if (e.InnerException != null) error = error + "\r\n" + e.InnerException;
 
-            if (e.InnerException != null)
-                Ошибка = Ошибка + "\r\n" + e.InnerException.ToString();
-
-           
-            // throw new Exception(Ошибка);
-            //  СообщитьОбОшибке(Ошибка);
-            return Ошибка;
+            return error;
         }
 
-        bool ВыполнитьМетодИнтерфейсаКакОбъекта(string name, object[] args, out object result, ref string Error)
+        private bool ExecuteInterfaceMethodAsObject(string name, object[] args, out object result, ref string Error)
         {
             result = null;
             Error = null;
-            if (!(IsType || T.GetTypeInfo().IsInterface)) return false;
+            if (!(IsType || Type.GetTypeInfo().IsInterface)) return false;
 
-            ИнфoрмацияОМетоде Метод;
+            ИнфoрмацияОМетоде method = InformationOnTheTypes.FindMethod(Object.GetType(), false, name, args);
 
-            Метод = InformationOnTheTypes.FindMethod(O.GetType(), false, name, args);
-
-            if (Метод == null) return false;
+            if (method == null) return false;
 
             try
             {
-                result = Метод.ExecuteMethod(O, args);
+                result = method.ExecuteMethod(Object, args);
                 return true;
             }
-
             catch (Exception e)
             {
-                Error += GetExeptionString("методе", name, e);
-
+                Error += GetExceptionString("методе", name, e);
             }
             return false;
         }
 
-        bool НайтиСвойствоИнтерфейсаКакОбъекта(string name, out IPropertyOrFieldInfo result)
+        private bool FindInterfacePropertyAsObject(string name, out IPropertyOrFieldInfo result)
         {
             result = null;
 
-            if (!(IsType || T.GetTypeInfo().IsInterface)) return false;
+            if (!(IsType || Type.GetTypeInfo().IsInterface)) return false;
 
-            result = InformationOnTheTypes.НайтиСвойство(O.GetType(), name);
+            result = InformationOnTheTypes.НайтиСвойство(Object.GetType(), name);
 
             if (result == null)
                 return false;
 
             return true;
         }
-        public bool TryInvokeMember(string name, object[] argsOrig, out object result, List<int> ИзмененныеПараметры, out string Error)
-        {        // Unwrap any AutoWrap'd objects (they need to be raw if a paramater)
-            Error = null;
+
+        public bool TryInvokeMember(string name, object[] argsOrig, out object result, List<int> changedParameters, out string error)
+        {
+            error = null;
             if (IndexInStorage == 0 && name == "ОчиститьСсылку")
             {
-                //   NetObjectToNative.ОчиститьСсылку((string)argsOrig[0]);
-                AutoWrap temp = argsOrig[0] as AutoWrap;
-                if (temp != null)
-                    ObjectsList.RemoveKey(temp.IndexInStorage);
+                if (argsOrig[0] is AutoWrap temp) ObjectsList.RemoveKey(temp.IndexInStorage);
                 result = null;
                 return true;
             }
@@ -300,163 +226,114 @@ namespace NetObjectToNative
             result = null;
             object[] args = GetArrayRealObjects(argsOrig);
 
-            var culture = CultureInfo.InvariantCulture;
-
-
-
-            // Invoke whatever needs be invoked!
-            object obj = null;
-
             try
             {
-
-                if (IsDynamic)
-                {
-                    obj = DynamicInvoker.InvokeMember(O, name, args);
-
-                }
+                object obj;
+                if (IsDynamic) obj = DynamicInvoker.InvokeMember(Object, name, args);
                 else
                 {
-                    var Метод = InformationOnTheTypes.FindMethod(T, IsType, name, args);
+                    var method = InformationOnTheTypes.FindMethod(Type, IsType, name, args);
 
-                    if (Метод == null)
+                    if (method == null)
                     {
-                       if (name == "_as")
+                        if (name == "_as") obj = NetObjectToNative.GetInterface(Object, args[0]);
+                        else if (!ExtensionMethod.ExecuteExtensionMethod(this, name, args, out obj)
+                                 && !ExecuteInterfaceMethodAsObject(name, args, out obj, ref error))
                         {
-
-                            obj = NetObjectToNative.ПолучитьИнтерфейс(O, args[0]);
+                            error += " Не найден метод " + name;
+                            return false;
                         }
-                        else
-                            if (!МетодыРасширения.НайтиИВыполнитьМетодРасширения(this, name, args, out obj))
-                            if (!ВыполнитьМетодИнтерфейсаКакОбъекта(name, args, out obj, ref Error))
-                            {
-                                // СообщитьОбОшибке("Не найден метод " + name);
-                                Error += " Не найден метод " + name;
-                                return false;
-                            }
                     }
-                    else
-                    {
-
-
-
-                        if (IsType)
-                            obj = Метод.ExecuteMethod(null, args);
-
-                        else
-                            obj = Метод.ExecuteMethod(O, args); ;
-
-
-
-                    }
+                    else obj = method.ExecuteMethod(IsType ? null : Object, args);
                 }
-                SetChangeInArgs(argsOrig, args, ИзмененныеПараметры);
+                SetChangeInArgs(argsOrig, args, changedParameters);
                 result = obj;
-
             }
             catch (Exception e)
             {
-                Error = GetExeptionString("методе", name, e);
+                error = GetExceptionString("методе", name, e);
 
                 return false;
-
             }
 
             // Так как параметры могут изменяться (OUT) и передаются по ссылке
             // нужно обратно обернуть параметры
 
             return true;
-
         }
 
-
-        public bool TrySetMember(string name, object valueOrig, out string Error)
+        public bool TrySetMember(string name, object valueOrig, out string error)
         {
-            Error = null;
+            error = null;
             object value = GetRalObject(valueOrig);
             try
             {
                 if (IsDynamic)
                 {
-                    DynamicInvoker.SetValue(O, name, value);
+                    DynamicInvoker.SetValue(Object, name, value);
                     return true;
                 }
 
-
-                var Свойcтво = InformationOnTheTypes.НайтиСвойство(T, name);
-                if (Свойcтво == null)
+                var property = InformationOnTheTypes.НайтиСвойство(Type, name);
+                if (property == null)
                 {
-                    if (!НайтиСвойствоИнтерфейсаКакОбъекта(name, out Свойcтво))
+                    if (!FindInterfacePropertyAsObject(name, out property))
                     {
-                        // СообщитьОбОшибке("Не найдено Свойство " + name);
-                        Error = "Не найдено Свойство " + name;
+                        error = "Не найдено Свойство " + name;
                         return false;
                     }
                 }
 
-
-                Свойcтво.SetValue(O, value);
-
+                property.SetValue(Object, value);
 
                 return true;
-
             }
             catch (Exception e)
             {
-                Error = GetExeptionString("установки свойства", name, e);
-
+                error = GetExceptionString("установки свойства", name, e);
             }
             return false;
         }
+
         // получение свойства
-        public bool TryGetMember(string name, out object result, out string Error)
+        public bool TryGetMember(string name, out object result, out string error)
         {
             result = null;
-            Error = null;
+            error = null;
             try
             {
                 if (IsDynamic)
                 {
-                    result = DynamicInvoker.GetValue(O, name);
+                    result = DynamicInvoker.GetValue(Object, name);
                     return true;
                 }
 
                 if (IsEnum)
                 {
-                    result = Enum.Parse(T, name);
+                    result = Enum.Parse(Type, name);
                     return true;
-
                 }
 
-                var Свойcтво = InformationOnTheTypes.НайтиСвойство(T, name);
-
-                if (Свойcтво == null)
+                var property = InformationOnTheTypes.НайтиСвойство(Type, name);
+                if (property == null)
                 {
-                    if (!НайтиСвойствоИнтерфейсаКакОбъекта(name, out Свойcтво))
+                    if (!FindInterfacePropertyAsObject(name, out property))
                     {
-                        // СообщитьОбОшибке("Не найдено Свойство " + name);
-                        Error = "Не найдено Свойство " + name;
+                        error = "Не найдено Свойство " + name;
                         return false;
                     }
                 }
 
-
-
-                result = Свойcтво.GetValue(O);
-
+                result = property.GetValue(Object);
 
                 return true;
             }
             catch (Exception e)
             {
-                Error = GetExeptionString("получения свойства", name, e);
+                error = GetExceptionString("получения свойства", name, e);
             }
             result = null;
             return false;
         }
-
-
-       
-       
     }
 }
