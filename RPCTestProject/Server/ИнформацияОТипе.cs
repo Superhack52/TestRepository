@@ -3,144 +3,127 @@
     using System;
     using System.Reflection;
 
-    public class ИнформацияОТипеПараметра : IComparable<ИнформацияОТипеПараметра>
+    public class RpcTypeInfo : IComparable<RpcTypeInfo>
     {
-        public Type Тип;
-        private bool IsByRef;
-        private bool IsValue;
-        private int УровеньИерархии;
-        private bool IsNullable;
+        public Type Type;
+        private bool _isByRef;
+        private bool _isValue;
+        private int _hierarchyLevel;
+        private bool _isNullable;
         public bool IsGenericType;
 
-        public ИнформацияОТипеПараметра(Type type)
+        public RpcTypeInfo(Type type)
         {
-            var TI = type.GetTypeInfo();
-            IsByRef = TI.IsByRef;
+            var typeInfo = type.GetTypeInfo();
+            _isByRef = typeInfo.IsByRef;
 
-            IsGenericType = (TI.IsGenericType && TI.IsGenericTypeDefinition) || TI.ContainsGenericParameters;
+            IsGenericType = (typeInfo.IsGenericType && typeInfo.IsGenericTypeDefinition) || typeInfo.ContainsGenericParameters;
 
-            if (IsByRef)
+            if (_isByRef)
             {
-                Тип = type.GetElementType();
-                TI = Тип.GetTypeInfo();
+                Type = type.GetElementType();
+                typeInfo = Type.GetTypeInfo();
             }
             else
-                Тип = type;
+                Type = type;
 
-            IsValue = TI.IsValueType;
+            _isValue = typeInfo.IsValueType;
 
-            if (IsValue)
+            if (_isValue)
             {
-                УровеньИерархии = 0;
-                if (TI.IsGenericType && TI.GetGenericTypeDefinition() == typeof(Nullable<>))
+                _hierarchyLevel = 0;
+                if (typeInfo.IsGenericType && typeInfo.GetGenericTypeDefinition() == typeof(Nullable<>))
                 {
-                    IsNullable = true;
-
-                    Тип = TI.GenericTypeArguments[0];
+                    _isNullable = true;
+                    Type = typeInfo.GenericTypeArguments[0];
                 }
             }
-            else
-                УровеньИерархии = НайтиУровень(0, Тип);
+            else _hierarchyLevel = FindLvl(0, Type);
         }
 
-        private static int НайтиУровень(int Уровень, Type type)
+        private static int FindLvl(int lvl, Type type)
         {
-            if (type == null)
-                return -1;// всякие char*
+            if (type == null) return -1;// всякие char*
+            if (type == typeof(object)) return lvl;
 
-            if (type == typeof(object))
-                return Уровень;
-
-            return НайтиУровень(Уровень + 1, type.GetTypeInfo().BaseType);
+            return FindLvl(lvl + 1, type.GetTypeInfo().BaseType);
         }
 
-        public int CompareTo(ИнформацияОТипеПараметра elem)
+        public int CompareTo(RpcTypeInfo elem)
         {
-            int res = -IsByRef.CompareTo(elem.IsByRef);
+            int res = -_isByRef.CompareTo(elem._isByRef);
 
             if (res != 0) return res;
 
-            if (Тип == elem.Тип)
-                return 0;
+            if (Type == elem.Type) return 0;
 
-            res = -IsValue.CompareTo(elem.IsValue);
+            res = -_isValue.CompareTo(elem._isValue);
 
             if (res != 0) return res;
 
-            if (IsValue && elem.IsValue)
+            if (_isValue && elem._isValue)
             {
-                res = IsNullable.CompareTo(elem.IsNullable);
-
+                res = _isNullable.CompareTo(elem._isNullable);
                 if (res != 0) return res;
             }
 
-            res = -УровеньИерархии.CompareTo(elem.УровеньИерархии);
+            res = -_hierarchyLevel.CompareTo(elem._hierarchyLevel);
 
             if (res != 0) return res;
 
-            return Тип.ToString().CompareTo(elem.Тип.ToString());
+            return string.Compare(Type.ToString(), elem.Type.ToString(), StringComparison.Ordinal);
         }
 
-        public bool Равняется(Type type)
+        public bool IsEqual(Type type)
         {
-            if (type == null)
-            {
-                if (!IsValue)
-                    return true;
-
-                if (IsNullable)
-                    return true;
-                else
-                    return false;
-            }
-
+            if (type == null) return !_isValue || _isNullable;
             // или использовать IsInstanceOfType
-            if (IsValue) return Тип == type;
+            if (_isValue) return Type == type;
 
-            return Тип.GetTypeInfo().IsAssignableFrom(type);
+            return Type.GetTypeInfo().IsAssignableFrom(type);
         }
     }
 
-    public class ИнфoрмацияОМетоде
+    public class RpcMethodInfo
     {
         public MethodInfo Method;
-        public ИнформацияОТипеПараметра[] Параметры;
-        public int КоличествоПараметров;
-        public bool hasParams;
+        public RpcTypeInfo[] Parameters;
+        public int ParametersCount;
+        public bool HasParams;
         public bool HasDefaultValue;
         public int FirstDefaultParams;
         public Type TypeParams;
-        public int КоличествоПараметровПарамс;
-        public ИнформацияОТипеПараметра ИнформацияОТипеЭлемента;
+        public int ParamsCount;
+        public RpcTypeInfo ElementType;
         public bool IsGeneric;
-        public ДанныеОДженерикМетоде ДженерикМетод;
+        public GenericMethodData GenericMethod;
         public Type ReturnType;
 
-        public ИнфoрмацияОМетоде(MethodInfo MI)
+        public RpcMethodInfo(MethodInfo methodInfo)
         {
-            Method = MI;
+            Method = methodInfo;
 
             ParameterInfo[] parameters = Method.GetParameters();
-            hasParams = false;
-            КоличествоПараметров = parameters.Length;
-            КоличествоПараметровПарамс = 0;
-            if (КоличествоПараметров > 0)
+            HasParams = false;
+            ParametersCount = parameters.Length;
+            ParamsCount = 0;
+            if (ParametersCount > 0)
             {
-                hasParams = parameters[parameters.Length - 1].GetCustomAttributes(typeof(ParamArrayAttribute), false).GetEnumerator().MoveNext();
+                HasParams = parameters[parameters.Length - 1].GetCustomAttributes(typeof(ParamArrayAttribute), false).GetEnumerator().MoveNext();
             }
 
-            if (hasParams)
+            if (HasParams)
             {
                 TypeParams = parameters[parameters.Length - 1].ParameterType.GetElementType();
-                ИнформацияОТипеЭлемента = InformationOnTheTypes.ПолучитьИнформациюОТипе(TypeParams);
+                ElementType = InformationOnTheTypes.GetTypeInformation(TypeParams);
             }
 
-            Параметры = new ИнформацияОТипеПараметра[КоличествоПараметров];
+            Parameters = new RpcTypeInfo[ParametersCount];
 
             for (int i = 0; i < parameters.Length; i++)
             {
                 var param = parameters[i];
-                Параметры[i] = InformationOnTheTypes.ПолучитьИнформациюОТипе(param.ParameterType);
+                Parameters[i] = InformationOnTheTypes.GetTypeInformation(param.ParameterType);
 
                 if (!HasDefaultValue && param.HasDefaultValue)
                 {
@@ -150,129 +133,115 @@
                 }
             }
 
-            IsGeneric = MI.IsGenericMethod && MI.IsGenericMethodDefinition;
+            IsGeneric = methodInfo.IsGenericMethod && methodInfo.IsGenericMethodDefinition;
 
-            if (IsGeneric)
-                ДженерикМетод = new ДанныеОДженерикМетоде(Method, Параметры);
-
-            ReturnType = MI.ReturnType.GetTypeInfo().IsInterface ? MI.ReturnType : null;
+            if (IsGeneric) GenericMethod = new GenericMethodData(Method, Parameters);
+            ReturnType = methodInfo.ReturnType.GetTypeInfo().IsInterface ? methodInfo.ReturnType : null;
         }
 
-        public ИнфoрмацияОМетоде(ИнфoрмацияОМетоде ИМ, int КолПарам)
+        public RpcMethodInfo(RpcMethodInfo methodInfo, int parametersCount)
         {
-            Method = ИМ.Method;
-            КоличествоПараметров = КолПарам;
-            КоличествоПараметровПарамс = ИМ.КоличествоПараметров;
-            ReturnType = ИМ.ReturnType;
+            Method = methodInfo.Method;
+            ParametersCount = parametersCount;
+            ParamsCount = methodInfo.ParametersCount;
+            ReturnType = methodInfo.ReturnType;
 
-            Параметры = new ИнформацияОТипеПараметра[КолПарам];
+            Parameters = new RpcTypeInfo[parametersCount];
 
-            var count = ИМ.HasDefaultValue ? КолПарам : КоличествоПараметровПарамс - 1;
+            var count = methodInfo.HasDefaultValue ? parametersCount : ParamsCount - 1;
             for (int i = 0; i < count; i++)
             {
-                Параметры[i] = ИМ.Параметры[i];
+                Parameters[i] = methodInfo.Parameters[i];
             }
 
-            if (ИМ.HasDefaultValue)
+            if (methodInfo.HasDefaultValue)
             {
                 HasDefaultValue = true;
-                FirstDefaultParams = ИМ.FirstDefaultParams;
+                FirstDefaultParams = methodInfo.FirstDefaultParams;
                 return;
             }
 
-            hasParams = true;
-            TypeParams = ИМ.TypeParams;
-            ИнформацияОТипеЭлемента = ИМ.ИнформацияОТипеЭлемента;
+            HasParams = true;
+            TypeParams = methodInfo.TypeParams;
+            ElementType = methodInfo.ElementType;
 
-            var ИОТ = InformationOnTheTypes.ПолучитьИнформациюОТипе(ИМ.TypeParams);
+            var rpcTypeInfo = InformationOnTheTypes.GetTypeInformation(methodInfo.TypeParams);
 
-            for (int i = КоличествоПараметровПарамс - 1; i < КолПарам; i++)
+            for (int i = ParamsCount - 1; i < parametersCount; i++)
             {
-                Параметры[i] = ИОТ;
+                Parameters[i] = rpcTypeInfo;
             }
         }
 
         // Добавить парамс как обычный метод
-        public ИнфoрмацияОМетоде(ИнфoрмацияОМетоде ИМ)
+        public RpcMethodInfo(RpcMethodInfo methodInfo)
         {
-            Method = ИМ.Method;
-            КоличествоПараметров = ИМ.КоличествоПараметров;
-            КоличествоПараметровПарамс = 0;
-            hasParams = false;
+            Method = methodInfo.Method;
+            ParametersCount = methodInfo.ParametersCount;
+            ParamsCount = 0;
+            HasParams = false;
             HasDefaultValue = false;
-            ReturnType = ИМ.ReturnType;
-            Параметры = ИМ.Параметры;
+            ReturnType = methodInfo.ReturnType;
+            Parameters = methodInfo.Parameters;
         }
 
-        public bool Сравнить(Type[] параметры)
+        public bool Compare(Type[] parameters)
         {
-            for (int i = 0; i < параметры.Length; i++)
+            for (int i = 0; i < parameters.Length; i++)
             {
-                if (!Параметры[i].Равняется(параметры[i]))
-                    return false;
+                if (!Parameters[i].IsEqual(parameters[i])) return false;
             }
 
             return true;
         }
 
-        public bool СравнитьСпараметрамиПоУмолчанию(Type[] параметры)
+        public bool CompareDefault(Type[] parameters)
         {
-            if ((параметры.Length < FirstDefaultParams) || параметры.Length > КоличествоПараметров)
-                return false;
-
-            return Сравнить(параметры);
+            if ((parameters.Length < FirstDefaultParams) || parameters.Length > ParametersCount) return false;
+            return Compare(parameters);
         }
 
-        public bool СравнитьПарамс(Type[] параметры)
+        public bool CompareParams(Type[] parameters)
         {
-            if (HasDefaultValue)
-                return СравнитьСпараметрамиПоУмолчанию(параметры);
+            if (HasDefaultValue) return CompareDefault(parameters);
 
-            var ПоследнийПарам = КоличествоПараметров - 1;
+            var lastParameterIndex = ParametersCount - 1;
 
-            if (параметры.Length < ПоследнийПарам)
-                return false;
+            if (parameters.Length < lastParameterIndex) return false;
 
-            for (int i = 0; i < ПоследнийПарам; i++)
+            for (int i = 0; i < lastParameterIndex; i++)
             {
-                if (!Параметры[i].Равняется(параметры[i]))
-                    return false;
+                if (!Parameters[i].IsEqual(parameters[i])) return false;
             }
 
-            if (параметры.Length == КоличествоПараметров && параметры[ПоследнийПарам] == Параметры[КоличествоПараметров - 1].Тип)
+            if (parameters.Length == ParametersCount && parameters[lastParameterIndex] == Parameters[ParametersCount - 1].Type)
                 return true;
 
-            for (int i = ПоследнийПарам; i < параметры.Length; i++)
+            for (int i = lastParameterIndex; i < parameters.Length; i++)
             {
-                if (!ИнформацияОТипеЭлемента.Равняется(параметры[i]))
-                    return false;
+                if (!ElementType.IsEqual(parameters[i])) return false;
             }
 
             return true;
         }
 
-        public object Invoke(object Target, object[] input)
-        {
-            return Method.Invoke(Target, input);
-        }
+        public object Invoke(object target, object[] input) => Method.Invoke(target, input);
 
-        public object ВыполнитьМетодСДефолтнымиПараметрами(object Target, object[] input, int КолПарам)
+        public object InvokeWithDefaultParameters(object target, object[] input, int parametersCount)
         {
-            if (input.Length == КолПарам)
-                return Invoke(Target, input);
-
-            object[] параметры = new object[КолПарам];
+            if (input.Length == parametersCount) return Invoke(target, input);
+            object[] parametersValue = new object[parametersCount];
             ParameterInfo[] parameters = Method.GetParameters();
-            Array.Copy(input, параметры, input.Length);
+            Array.Copy(input, parametersValue, input.Length);
 
             for (int i = input.Length; i < parameters.Length; i++)
             {
-                параметры[i] = parameters[i].RawDefaultValue;
+                parametersValue[i] = parameters[i].RawDefaultValue;
             }
 
-            var res = Invoke(Target, параметры);
+            var res = Invoke(target, parametersValue);
 
-            Array.Copy(параметры, input, input.Length);
+            Array.Copy(parametersValue, input, input.Length);
 
             if (res != null && ReturnType != null) res = new AutoWrap(res, ReturnType);
             return res;
@@ -280,34 +249,26 @@
 
         public object ExecuteMethod(object Target, object[] input)
         {
-            if (!(hasParams || HasDefaultValue))
+            if (!(HasParams || HasDefaultValue))
                 return Invoke(Target, input);
 
-            int КолПарам = (КоличествоПараметровПарамс > 0) ? КоличествоПараметровПарамс : КоличествоПараметров;
+            int parametersCount = (ParamsCount > 0) ? ParamsCount : ParametersCount;
 
-            if (HasDefaultValue)
-            {
-                return ВыполнитьМетодСДефолтнымиПараметрами(Target, input, КолПарам);
-            }
+            if (HasDefaultValue) return InvokeWithDefaultParameters(Target, input, parametersCount);
 
-            int последняяПозиция = КолПарам - 1;
+            int lastParameterIndex = parametersCount - 1;
 
-            object[] realParams = new object[КолПарам];
-            for (int i = 0; i < последняяПозиция; i++)
-                realParams[i] = input[i];
+            object[] realParams = new object[parametersCount];
+            for (int i = 0; i < lastParameterIndex; i++) realParams[i] = input[i];
 
-            Array массивПараметров = Array.CreateInstance(TypeParams, input.Length - последняяПозиция);
-            for (int i = 0; i < массивПараметров.Length; i++)
-                массивПараметров.SetValue(input[i + последняяПозиция], i);
+            Array parameters = Array.CreateInstance(TypeParams, input.Length - lastParameterIndex);
+            for (int i = 0; i < parameters.Length; i++) parameters.SetValue(input[i + lastParameterIndex], i);
 
-            realParams[последняяПозиция] = массивПараметров;
+            realParams[lastParameterIndex] = parameters;
 
             var res = Invoke(Target, realParams);
-
-            массивПараметров = (Array)realParams[последняяПозиция];
-            for (int i = 0; i < массивПараметров.Length; i++)
-                input[i + последняяПозиция] = массивПараметров.GetValue(i);
-
+            parameters = (Array)realParams[lastParameterIndex];
+            for (int i = 0; i < parameters.Length; i++) input[i + lastParameterIndex] = parameters.GetValue(i);
             if (res != null && ReturnType != null) res = new AutoWrap(res, ReturnType);
             return res;
         }

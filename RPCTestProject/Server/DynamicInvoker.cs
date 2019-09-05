@@ -245,13 +245,13 @@ namespace NetObjectToNative
             var query = from type in types
                         let typeInfo = type.GetTypeInfo()
                         where typeInfo.IsSealed && typeInfo.IsAbstract
-                        let synonym = InformationOnTheTypes.ИмяМетодаПоСинониму(type, methodName)
+                        let synonym = InformationOnTheTypes.GetMethodNameBySynonym(type, methodName)
                         from method in typeInfo.GetMethods()
                         where method.IsStatic && method.IsDefined(typeof(ExtensionAttribute), false)
                                               && method.Name == synonym && (filter?.Invoke(method) ?? true)
                         let parameterType = method.GetParameters()[0].ParameterType
                         where (parameterType.IsAssignableFrom(extendedType) ||
-                               ДанныеОДженерикМетоде.ПодходитДженерикПараметр(parameterType, extendedType))
+                               GenericMethodData.IsSuit(parameterType, extendedType))
                         select type;
 
             return query.Distinct().ToArray();

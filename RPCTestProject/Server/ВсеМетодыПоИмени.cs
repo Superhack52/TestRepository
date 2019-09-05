@@ -1,328 +1,243 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Reflection;
-
-namespace NetObjectToNative
+﻿namespace NetObjectToNative
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Reflection;
 
-    public class СравнительМетодов : IComparer<ИнфoрмацияОМетоде>
+    public class CompareMethods : IComparer<RpcMethodInfo>
     {
-
-
-        public int Compare(ИнфoрмацияОМетоде A, ИнфoрмацияОМетоде B)
+        public int Compare(RpcMethodInfo x, RpcMethodInfo y)
         {
             int res = 0;
-            for (int i = 0; i < A.Параметры.Count(); i++)
+            for (int i = 0; i < x.Parameters.Count(); i++)
             {
-
-                res = A.Параметры[i].CompareTo(B.Параметры[i]);
+                res = x.Parameters[i].CompareTo(y.Parameters[i]);
 
                 if (res != 0) return res;
             }
 
-            res = A.hasParams.CompareTo(B.hasParams);
+            res = x.HasParams.CompareTo(y.HasParams);
 
             if (res != 0) return res;
 
-
-            res = -A.КоличествоПараметровПарамс.CompareTo(B.КоличествоПараметровПарамс);
+            res = -x.ParamsCount.CompareTo(y.ParamsCount);
             if (res != 0) return res;
 
-            return A.Method.ToString().CompareTo(B.Method.ToString());
+            return string.Compare(x.Method.ToString(), y.Method.ToString(), StringComparison.Ordinal);
         }
-
-
-
     }
 
-    public class СравнительМетодовСпарамс : IComparer<ИнфoрмацияОМетоде> 
+    public class CompareMethodsParams : IComparer<RpcMethodInfo>
     {
-
-
-        public int Compare(ИнфoрмацияОМетоде A, ИнфoрмацияОМетоде B)
+        public int Compare(RpcMethodInfo x, RpcMethodInfo y)
         {
-
-
             int res = 0;
-            res=-A.HasDefaultValue.CompareTo(B.HasDefaultValue);
+            res = -x.HasDefaultValue.CompareTo(y.HasDefaultValue);
             if (res != 0) return res;
 
-            res = -A.КоличествоПараметров.CompareTo(B.КоличествоПараметров);
+            res = -x.ParametersCount.CompareTo(y.ParametersCount);
             if (res != 0) return res;
 
-            for (int i = 0; i < A.Параметры.Count() - 1; i++)
+            for (int i = 0; i < x.Parameters.Count() - 1; i++)
             {
-
-                res = A.Параметры[i].CompareTo(B.Параметры[i]);
-
+                res = x.Parameters[i].CompareTo(y.Parameters[i]);
                 if (res != 0) return res;
             }
 
-            res = A.hasParams.CompareTo(B.hasParams);
-
+            res = x.HasParams.CompareTo(y.HasParams);
             if (res != 0) return res;
 
-
-
-
-            return A.Method.ToString().CompareTo(B.Method.ToString());
+            return string.Compare(x.Method.ToString(), y.Method.ToString(), StringComparison.Ordinal);
         }
     }
+
     public class AllMethodsForName
     {
+        public int MaxParamCount { get; private set; }
 
-        public int MaxParamCount { get; private set;}
+        private Dictionary<int, List<RpcMethodInfo>> _commonMethods = new Dictionary<int, List<RpcMethodInfo>>();
 
-        Dictionary<int, List<ИнфoрмацияОМетоде>> ОбычныеМетоды = new Dictionary<int, List<ИнфoрмацияОМетоде>>();
+        private List<RpcMethodInfo> _methodsParams = new List<RpcMethodInfo>();
 
-        List<ИнфoрмацияОМетоде> МетодыСParams = new List<ИнфoрмацияОМетоде>();
-
-        void ДобавитьВСловарь(ИнфoрмацияОМетоде им, int КоличествоПараметров)
+        private void AddMethod(RpcMethodInfo methodInfo, int parametersCount)
         {
-            List<ИнфoрмацияОМетоде> СписокМетодов = null;
-
-            if (!ОбычныеМетоды.TryGetValue(КоличествоПараметров, out СписокМетодов))
+            if (!_commonMethods.TryGetValue(parametersCount, out var methodList))
             {
-                СписокМетодов = new List<ИнфoрмацияОМетоде>();
-                ОбычныеМетоды[КоличествоПараметров] = СписокМетодов;
-
-
+                methodList = new List<RpcMethodInfo>();
+                _commonMethods[parametersCount] = methodList;
             }
 
-
-            СписокМетодов.Add(им);
+            methodList.Add(methodInfo);
         }
 
-        void ДобавитПарамсВСписок(KeyValuePair<int, List<ИнфoрмацияОМетоде>>[] Массив, ИнфoрмацияОМетоде Им)
+        private void AddParamsToList(KeyValuePair<int, List<RpcMethodInfo>>[] valueArray, RpcMethodInfo methodInfo)
         {
-            int минКолПарам =Им.HasDefaultValue? Им.FirstDefaultParams: Им.КоличествоПараметров - 1;
+            int minCount = methodInfo.HasDefaultValue ? methodInfo.FirstDefaultParams : methodInfo.ParametersCount - 1;
 
-
-            foreach (var кв in Массив)
+            foreach (var keyValuePair in valueArray)
             {
+                if (keyValuePair.Key < minCount) continue;
 
-                if (кв.Key < минКолПарам) continue;
-
-                if (!(Им.HasDefaultValue && кв.Key >= Им.КоличествоПараметров))
+                if (!(methodInfo.HasDefaultValue && keyValuePair.Key >= methodInfo.ParametersCount))
                 {
-                    var им = new ИнфoрмацияОМетоде(Им, кв.Key);
-                    кв.Value.Add(им);
+                    keyValuePair.Value.Add(new RpcMethodInfo(methodInfo, keyValuePair.Key));
                 }
             }
-
         }
-        void ДобавитьМетодыСпарамсВОбычныеМетоды()
+
+        private void AddParamsMethodToCommon()
         {
-
-            var KV = ОбычныеМетоды.OrderBy(x => x.Key).ToArray();
-            foreach (var им in МетодыСParams)
+            var keyValuePairs = _commonMethods.OrderBy(x => x.Key).ToArray();
+            foreach (var methodInfo in _methodsParams)
             {
-
-                ДобавитПарамсВСписок(KV, им);
-
-
+                AddParamsToList(keyValuePairs, methodInfo);
             }
-
-            foreach (var kv in KV)
+            foreach (var kv in keyValuePairs)
             {
-                kv.Value.Sort(new СравнительМетодов());
-
+                kv.Value.Sort(new CompareMethods());
             }
         }
-        public AllMethodsForName(IEnumerable<MethodInfo> методы)
+
+        public AllMethodsForName(IEnumerable<MethodInfo> methods)
         {
-            
-            foreach (var метод in методы)
+            foreach (var method in methods)
             {
+                var methodInfo = new RpcMethodInfo(method);
 
-                var им = new ИнфoрмацияОМетоде(метод);
-
-                if (им.hasParams || им.HasDefaultValue)
+                if (methodInfo.HasParams || methodInfo.HasDefaultValue)
                 {
-                    МетодыСParams.Add(им);
-                    var ОбычныйМетод = new ИнфoрмацияОМетоде(им);
-                    ДобавитьВСловарь(ОбычныйМетод, ОбычныйМетод.КоличествоПараметров);
+                    _methodsParams.Add(methodInfo);
+                    var commonMethod = new RpcMethodInfo(methodInfo);
+                    AddMethod(commonMethod, commonMethod.ParametersCount);
                 }
                 else
                 {
-                    if (MaxParamCount < им.КоличествоПараметров) MaxParamCount = им.КоличествоПараметров;
+                    if (MaxParamCount < methodInfo.ParametersCount) MaxParamCount = methodInfo.ParametersCount;
 
-                    ДобавитьВСловарь(им, им.КоличествоПараметров);
+                    AddMethod(methodInfo, methodInfo.ParametersCount);
                 }
-
             }
 
+            AddParamsMethodToCommon();
 
-            ДобавитьМетодыСпарамсВОбычныеМетоды();
-
-            if (МетодыСParams.Count()>0)
+            if (_methodsParams.Any())
             {
-                
-                МетодыСParams.Sort(new СравнительМетодовСпарамс());
-
+                _methodsParams.Sort(new CompareMethodsParams());
                 if (MaxParamCount < 16) MaxParamCount = 16;
-
             }
-
-
         }
 
-
-
-        public ИнфoрмацияОМетоде НайтиДженерикМетод(bool IsStatic, List<ИнфoрмацияОМетоде> СписокМетодов, Type[] параметры)
+        public RpcMethodInfo FindGenericMethod(bool isStatic, List<RpcMethodInfo> methodsList, Type[] parameters)
         {
-
-        
-
-                foreach (var метод in СписокМетодов)
+            foreach (var method in methodsList)
+            {
+                if (method.IsGeneric && isStatic == method.Method.IsStatic)
                 {
-                    if (метод.IsGeneric && IsStatic == метод.Method.IsStatic)
-                {
-                    var MI = метод.ДженерикМетод.ПолучитьРеальныйМетод(параметры);
+                    var methodInfo = method.GenericMethod.GetRealMethod(parameters);
 
-                    if (MI!=null)
+                    if (methodInfo != null)
                     {
-                        var res = new ИнфoрмацияОМетоде(MI);
-
-                        if (res.Сравнить(параметры))
-                            return res;
-
+                        var res = new RpcMethodInfo(methodInfo);
+                        if (res.Compare(parameters)) return res;
                     }
-
                 }
             }
 
             return null;
-         
-
         }
 
-        public static Type[] GetTypesParameters(object[] параметрыОбъекты)
+        public static Type[] GetTypesParameters(object[] parametersObjects)
         {
-            Type[] параметры = new Type[параметрыОбъекты.Length];
+            Type[] parameters = new Type[parametersObjects.Length];
 
-            for (var i = 0; i < параметрыОбъекты.Length; i++)
+            for (var i = 0; i < parametersObjects.Length; i++)
             {
-                if (параметрыОбъекты[i] == null)
-                    параметры[i] = null;
-                else
-                    параметры[i] = параметрыОбъекты[i].GetType();
-
-
+                if (parametersObjects[i] == null) parameters[i] = null;
+                else parameters[i] = parametersObjects[i].GetType();
             }
 
-            return параметры;
-
+            return parameters;
         }
-        public ИнфoрмацияОМетоде НайтиМетод(bool IsStatic, object[] параметрыОбъекты)
+
+        public RpcMethodInfo FindMethod(bool isStatic, object[] parametersObjects)
         {
+            var parameters = GetTypesParameters(parametersObjects);
 
-            
-            List<ИнфoрмацияОМетоде> СписокМетодов;
-
-           var параметры= GetTypesParameters(параметрыОбъекты);
-
-            if (ОбычныеМетоды.TryGetValue(параметры.Length, out СписокМетодов))
+            if (_commonMethods.TryGetValue(parameters.Length, out var methodsList))
             {
-                if (параметры.Length == 0)
+                if (parameters.Length == 0)
                 {
-                    var метод = СписокМетодов[0];
+                    var method = methodsList[0];
+                    if (!method.IsGeneric && isStatic == method.Method.IsStatic) return method;
 
-                    if (!метод.IsGeneric && IsStatic == метод.Method.IsStatic)
-                        return метод;
-                    else
-                        return null;
+                    return null;
                 }
 
-                foreach (var метод in СписокМетодов)
+                foreach (var method in methodsList)
                 {
-                    if (!метод.IsGeneric && IsStatic == метод.Method.IsStatic && метод.Сравнить(параметры))
-                        return метод;
-
-                }
-
-
-            }
-
-
-            foreach (var метод in МетодыСParams)
-            {
-                if (!метод.IsGeneric && IsStatic == метод.Method.IsStatic && метод.СравнитьПарамс(параметры))
-                    return метод;
-
-                if (метод.IsGeneric && IsStatic == метод.Method.IsStatic)
-                {
-                    // var MI = метод.ДженерикМетод.ПолучитьРеальныйМетод(параметры);
-                    var MI = метод.ДженерикМетод.ПолучитьРеальныйМетодСПарамс(параметры, метод);
-                    var res = new ИнфoрмацияОМетоде(MI);
-
-                    if (res.СравнитьПарамс(параметры))
-                        return res;
-
+                    if (!method.IsGeneric && isStatic == method.Method.IsStatic && method.Compare(parameters))
+                        return method;
                 }
             }
 
-            if (СписокМетодов != null)
+            foreach (var method in _methodsParams)
             {
-                var res = НайтиДженерикМетод(IsStatic, СписокМетодов, параметры);
+                if (!method.IsGeneric && isStatic == method.Method.IsStatic && method.CompareParams(parameters))
+                    return method;
+
+                if (method.IsGeneric && isStatic == method.Method.IsStatic)
+                {
+                    var methodInfo = method.GenericMethod.GetRealMethodsParams(parameters, method);
+                    var res = new RpcMethodInfo(methodInfo);
+
+                    if (res.CompareParams(parameters)) return res;
+                }
+            }
+
+            if (methodsList != null)
+            {
+                var res = FindGenericMethod(isStatic, methodsList, parameters);
                 if (res != null) return res;
             }
 
-          // AutoWrap.СообщитьОбОшибке("Метод существует но не подходят параметры");
+            // AutoWrap.СообщитьОбОшибке("Метод существует но не подходят parametersObjects");
             return null;
         }
 
-        public ИнфoрмацияОМетоде НайтиДженерикМетод2(bool IsStatic, Type[] ДженерикПараметры, Type[] ПараметрыМетода)
+        public RpcMethodInfo FindGenericMethod(bool isStatic, Type[] genericParameters, Type[] methodParameters)
         {
-            List<ИнфoрмацияОМетоде> СписокМетодов;
-            if (ОбычныеМетоды.TryGetValue(ПараметрыМетода.Length, out СписокМетодов))
+            if (_commonMethods.TryGetValue(methodParameters.Length, out var methodList))
             {
-
-                foreach (var метод in СписокМетодов)
+                foreach (var method in methodList)
                 {
-                    if (метод.IsGeneric && IsStatic == метод.Method.IsStatic)
+                    if (method.IsGeneric && isStatic == method.Method.IsStatic)
                     {
-                        // var MI = метод.ДженерикМетод.ПолучитьРеальныйМетод2(ДженерикПараметры, ПараметрыМетода);
-                        var MI = метод.ДженерикМетод.MI.MakeGenericMethod(ДженерикПараметры);
-                        if (MI != null)
+                        // var MethodInfo = метод.GenericMethod.GetRealMethod(genericParameters, methodParameters);
+                        var methodInfo = method.GenericMethod.MethodInfo.MakeGenericMethod(genericParameters);
+                        if (methodInfo != null)
                         {
-                            var res = new ИнфoрмацияОМетоде(MI);
-
-                            if (res.Сравнить(ПараметрыМетода))
-                                return res;
-
+                            var res = new RpcMethodInfo(methodInfo);
+                            if (res.Compare(methodParameters)) return res;
                         }
-
                     }
                 }
             }
 
-
-            foreach (var метод in МетодыСParams)
+            foreach (var method in _methodsParams)
             {
-                if (метод.IsGeneric && IsStatic == метод.Method.IsStatic)
-                { 
-                    var MI = метод.ДженерикМетод.MI.MakeGenericMethod(ДженерикПараметры);// метод.ДженерикМетод.ПолучитьРеальныйМетод2(ДженерикПараметры, ПараметрыМетода);
-                    if (MI != null)
+                if (method.IsGeneric && isStatic == method.Method.IsStatic)
+                {
+                    var methodInfo = method.GenericMethod.MethodInfo.MakeGenericMethod(genericParameters);// метод.GenericMethod.GetRealMethod(genericParameters, methodParameters);
+                    if (methodInfo != null)
                     {
-                        var res = new ИнфoрмацияОМетоде(MI);
-
-                        if (res.СравнитьПарамс(ПараметрыМетода))
-                            return res;
-
+                        var res = new RpcMethodInfo(methodInfo);
+                        if (res.CompareParams(methodParameters)) return res;
                     }
-
                 }
-
             }
 
             return null;
         }
     }
-
-
-   
 }

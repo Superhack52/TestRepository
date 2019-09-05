@@ -170,7 +170,7 @@
         //стр=Врап.FindGenericMethod(ApiExtensions.ПолучитьСсылку(),true,"QuerySelector",ТипыАргументов.ПолучитьСсылку(),ТипыПараметров.ПолучитьСсылку());
         //QuerySelector_AnchorElement = ъ(стр);
 
-        public static ИнфoрмацияОМетоде FindGenericMethod(Type type, bool isStatic, string methodName, Type[] genericParameters, Type[] methodParameters)
+        public static RpcMethodInfo FindGenericMethod(Type type, bool isStatic, string methodName, Type[] genericParameters, Type[] methodParameters)
         {
             var res = InformationOnTheTypes.FindGenericMethodsWithGenericArguments(type, isStatic, methodName, genericParameters, methodParameters);
 
@@ -301,7 +301,7 @@
         //HttpClient=ъ(СборкаHttpClient.type("System.Net.Http.HttpClient"));
 
         public static void AddSynonym(object type, string synonym, string methodName) =>
-            InformationOnTheTypes.УстановитьСиноним(FindTypeForCreateObject(type), synonym, methodName);
+            InformationOnTheTypes.SetSynonym(FindTypeForCreateObject(type), synonym, methodName);
 
         // Нужен для получения типа неподдерживаемого 1С, беззнаковые,Decimal итд
         public static Object ChangeType(object type, object valueOrig) =>
@@ -384,7 +384,7 @@
         private static IPropertyOrFieldInfo FindProperty(object obj, string delegateName)
         {
             var T = obj.GetType();
-            var property = InformationOnTheTypes.НайтиСвойство(T, delegateName);
+            var property = InformationOnTheTypes.FindProperty(T, delegateName);
             if (property == null)
             {
                 throw new Exception("Не найдено Делегат  " + delegateName);

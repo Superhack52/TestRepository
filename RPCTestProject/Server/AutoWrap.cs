@@ -22,7 +22,7 @@
         // Ссылка на тип. Нужна для скорости и для использования типа интерфейса
         protected internal Type Type;
 
-        // Тип нужен для создания объектов, вызва статических методов
+        // Type нужен для создания объектов, вызва статических методов
         internal bool IsType;
 
         // Для перечислений нужно вызывать Enum.Parse(Type, name);
@@ -183,7 +183,7 @@
             Error = null;
             if (!(IsType || Type.GetTypeInfo().IsInterface)) return false;
 
-            ИнфoрмацияОМетоде method = InformationOnTheTypes.FindMethod(Object.GetType(), false, name, args);
+            RpcMethodInfo method = InformationOnTheTypes.FindMethod(Object.GetType(), false, name, args);
 
             if (method == null) return false;
 
@@ -205,7 +205,7 @@
 
             if (!(IsType || Type.GetTypeInfo().IsInterface)) return false;
 
-            result = InformationOnTheTypes.НайтиСвойство(Object.GetType(), name);
+            result = InformationOnTheTypes.FindProperty(Object.GetType(), name);
 
             if (result == null)
                 return false;
@@ -274,7 +274,7 @@
                     return true;
                 }
 
-                var property = InformationOnTheTypes.НайтиСвойство(Type, name);
+                var property = InformationOnTheTypes.FindProperty(Type, name);
                 if (property == null)
                 {
                     if (!FindInterfacePropertyAsObject(name, out property))
@@ -314,7 +314,7 @@
                     return true;
                 }
 
-                var property = InformationOnTheTypes.НайтиСвойство(Type, name);
+                var property = InformationOnTheTypes.FindProperty(Type, name);
                 if (property == null)
                 {
                     if (!FindInterfacePropertyAsObject(name, out property))

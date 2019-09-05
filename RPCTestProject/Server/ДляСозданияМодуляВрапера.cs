@@ -1,230 +1,188 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Reflection;
-
-namespace NetObjectToNative
+﻿namespace NetObjectToNative
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Reflection;
+    using System.Text;
 
-    
     public class WrapperForEvents<T>
     {
         public static readonly Func<Action<Guid, object>, T, object> WrapperCreator;
 
-
         public static Func<Action<Guid, object>, T, object> CreateWrapper()
         {
-            Type TypeTarget = typeof(T);
-            string TypeTargetStr = TypeTarget.FullName;
-            var ИмяКласса = "WrapperFor" + TypeTargetStr.Replace(".", "_").Replace("+", "_");
+            Type typeTarget = typeof(T);
+            string typeTargetStr = typeTarget.FullName;
+            var className = "WrapperFor" + typeTargetStr.Replace(".", "_").Replace("+", "_");
 
-            var wmc = new WrapperModuleCreater();
-            string строкаКласса = wmc.СоздатьОписания(TypeTarget);
+            var creator = new WrapperModuleCreator();
+            string classRow = creator.CreateDescription(typeTarget);
 
             var scr = Microsoft.CodeAnalysis.Scripting.ScriptOptions.Default;
 
-            var assemblies = wmc.СборкиВПараметрах.Keys.ToArray();
+            var assemblies = creator.AssembliesInParameters.Keys.ToArray();
 
             scr = scr.WithReferences(assemblies)
-            .WithImports("System", "NetObjectToNative", "System.Collections.Generic", "System.Reflection");
+                .WithImports("System", "NetObjectToNative", "System.Collections.Generic", "System.Reflection");
 
-
-
-            var res = (Func<Action<Guid, object>, T, object>)Microsoft.CodeAnalysis.CSharp.Scripting.CSharpScript.EvaluateAsync(строкаКласса, scr).Result;
-            return res;
+            return (Func<Action<Guid, object>, T, object>)Microsoft.CodeAnalysis.CSharp.Scripting.CSharpScript.EvaluateAsync(classRow, scr).Result;
         }
+
         static WrapperForEvents()
         {
             WrapperCreator = CreateWrapper();
-
-
         }
-
     }
 
-    public class WrapperModuleCreater
+    public class WrapperModuleCreator
     {
-        StringBuilder ДляОписанияСобытия = new StringBuilder();
-        StringBuilder ДляРеализацииСобытия = new StringBuilder();
-        StringBuilder EventsName = new StringBuilder();
-        string ИмяКласса;
-        string ИсточникСобытия;
-        public Dictionary<Assembly, bool> СборкиВПараметрах = new Dictionary<Assembly, bool>();
+        private StringBuilder _eventDescription = new StringBuilder();
+        private StringBuilder _eventBody = new StringBuilder();
+        private StringBuilder _eventsName = new StringBuilder();
+        private string _className;
+        private string _eventSource;
+        public Dictionary<Assembly, bool> AssembliesInParameters = new Dictionary<Assembly, bool>();
 
-
-        public WrapperModuleCreater()
+        public WrapperModuleCreator()
         {
-            var сборки = "mscorlib,System.Private.CoreLib.ni,System.Runtime,System.Collections,System.Reflection".Split(',');
+            var assemblies = "mscorlib,System.Private.CoreLib.ni,System.Runtime,System.Collections,System.Reflection".Split(',');
 
-            foreach (var str in сборки)
-                СборкиВПараметрах.Add(NetObjectToNative.GetAssembly(str, true), true);
+            foreach (var str in assemblies)
+                AssembliesInParameters.Add(NetObjectToNative.GetAssembly(str, true), true);
 
-            СборкиВПараметрах.Add(typeof(WrapperModuleCreater).GetTypeInfo().Assembly, true);
-
+            AssembliesInParameters.Add(typeof(WrapperModuleCreator).GetTypeInfo().Assembly, true);
         }
 
-        public static void WirteStatic()
+        public static void WriteStatic()
         {
             Console.WriteLine("Мое значение");
         }
 
-        public List<string> ПолучитьПараметры(EventInfo событие, out bool добавлять)
+        public List<string> GetParameters(EventInfo @event, out bool addTo)
         {
-            добавлять = true;
+            addTo = true;
             var rez = new List<string>();
-            var Метод = событие.EventHandlerType.GetMethod("Invoke");
+            var invokeMethod = @event.EventHandlerType.GetMethod("Invoke");
 
-            if (Метод.ReturnType != typeof(void))
+            if (invokeMethod.ReturnType != typeof(void))
             {
-                добавлять = false;
+                addTo = false;
                 return rez;
             }
 
-
-
-            var параметры = Метод.GetParameters();
-            foreach (var параметр in параметры)
+            var parameters = invokeMethod.GetParameters();
+            foreach (var parameter in parameters)
             {
-                rez.Add(параметр.Name);
-                var Сборка = параметр.ParameterType.GetTypeInfo().Assembly;
-                СборкиВПараметрах[Сборка] = true;
+                rez.Add(parameter.Name);
+                var assembly = parameter.ParameterType.GetTypeInfo().Assembly;
+                AssembliesInParameters[assembly] = true;
             }
 
             return rez;
         }
-        public void ПолучитьТекстСобытий(Type тип, List<Tuple<string, List<string>>> res)
+
+        public void GetEventText(Type type, List<Tuple<string, List<string>>> res)
         {
-
-
-            bool добавлять = true;
-            foreach (EventInfo e in тип.GetEvents())
+            foreach (EventInfo e in type.GetEvents())
             {
-                var параметры = ПолучитьПараметры(e, out добавлять);
-
-                if (добавлять) res.Add(new Tuple<string, List<string>>(e.Name, параметры));
-
+                var parameters = GetParameters(e, out var addTo);
+                if (addTo) res.Add(new Tuple<string, List<string>>(e.Name, parameters));
             }
-
         }
 
-
-
-
-
-        void ЗаполнитьРеализацииСобытий(Tuple<string, List<string>> value)
+        private void FillEventRealization(Tuple<string, List<string>> value)
         {
-            string ИмяСобытия = value.Item1;
-            var Параметры = value.Item2;
+            string eventName = value.Item1;
+            var parameters = value.Item2;
 
-
-            EventsName.AppendLine($"public event Action<object> {ИмяСобытия};");
-            if (Параметры.Count == 0)
+            _eventsName.AppendLine($"public event Action<object> {eventName};");
+            if (parameters.Count == 0)
             {
-                var str = $@"Target.{ИмяСобытия} += () =>
+                var str = $@"Target.{eventName} += () =>
                 {{
-                   if ({ИмяСобытия}!=null)
-                    {ИмяСобытия}(null);
+                   if ({eventName}!=null)
+                    {eventName}(null);
                 }};";
 
-                ДляРеализацииСобытия.AppendLine(str);
+                _eventBody.AppendLine(str);
 
                 return;
             }
-            else if (Параметры.Count == 1)
+            else if (parameters.Count == 1)
             {
-                String ИмяПараметра = Параметры[0];
-                var str = $@"Target.{ИмяСобытия} += ({ИмяПараметра}) =>
+                string parameterName = parameters[0];
+                var str = $@"Target.{eventName} += ({parameterName}) =>
                 {{
-               if ({ИмяСобытия}!=null)
-                   {ИмяСобытия}({ИмяПараметра});
-
-
+                    if ({eventName}!=null){eventName}({parameterName});
                 }};";
 
-
-
-                ДляРеализацииСобытия.AppendLine(str);
+                _eventBody.AppendLine(str);
                 return;
             }
 
-            StringBuilder ПараметрыСобытия = new StringBuilder();
-            StringBuilder СвойстваКласса = new StringBuilder();
-            foreach (var Параметр in Параметры)
+            StringBuilder eventParameters = new StringBuilder();
+            StringBuilder eventProperties = new StringBuilder();
+            foreach (var parameter in parameters)
             {
-                ПараметрыСобытия.Append(Параметр + ",");
-                СвойстваКласса.Append(Параметр + "=" + Параметр + ",");
-
+                eventParameters.Append(parameter + ",");
+                eventProperties.Append(parameter + "=" + parameter + ",");
             }
 
-            string strClass = СвойстваКласса.ToString(0, СвойстваКласса.Length - 1);
-            string strParam = ПараметрыСобытия.ToString(0, ПараметрыСобытия.Length - 1);
-            string шаблон = $@"Target.{ИмяСобытия} += ({strParam}) =>
+            string strClass = eventProperties.ToString(0, eventProperties.Length - 1);
+            string strParam = eventParameters.ToString(0, eventParameters.Length - 1);
+            string template = $@"Target.{eventName} += ({strParam}) =>
             {{
-if ({ИмяСобытия}!=null)
-{{
-               var  {ИмяСобытия}Object =  new {{{strClass}}};
-               {ИмяСобытия}({ИмяСобытия}Object);
-}}
+                if ({eventName}!=null)
+                {{
+                 var  {eventName}Object =  new {{{strClass}}};
+                {eventName}({eventName}Object);
+                }}
             }};
-";
+            ";
 
-
-            ДляРеализацииСобытия.AppendLine(шаблон);
-
+            _eventBody.AppendLine(template);
         }
-        void ЗаполнитьОписанияСобытий(Tuple<string, List<string>> value)
+
+        private void FillEventDescription(Tuple<string, List<string>> value)
         {
-            string ИмяСобытия = value.Item1;
-            var Параметры = value.Item2;
-            if (Параметры.Count == 0)
-                return;
+            string eventName = value.Item1;
+            var parameters = value.Item2;
+            if (parameters.Count == 0) return;
 
-            string шаблон = @"public object {0};";
-            ДляОписанияСобытия.AppendLine(string.Format(шаблон, ИмяСобытия));
-
+            string template = @"public object {0};";
+            _eventDescription.AppendLine(string.Format(template, eventName));
         }
-        public string СоздатьОписания(Type тип)
+
+        public string CreateDescription(Type type)
         {
+            string realType = type.FullName;
+            _className = realType.Replace(".", "_").Replace("+", "_");
+            _eventSource = @"""" + _className + @"""";
 
-            string ТипРеальногоОбъекта = тип.FullName;
-            ИмяКласса = ТипРеальногоОбъекта.Replace(".", "_").Replace("+", "_");
-            ИсточникСобытия = @"""" + ИмяКласса + @"""";
-
-            var Сборка = тип.GetTypeInfo().Assembly;
-            СборкиВПараметрах[Сборка] = true;
+            var assembly = type.GetTypeInfo().Assembly;
+            AssembliesInParameters[assembly] = true;
 
             var res = new List<Tuple<string, List<string>>>();
-            ПолучитьТекстСобытий(тип, res);
+            GetEventText(type, res);
             int i = 1;
             foreach (var value in res)
             {
                 i++;
 
-                //     ЗаполнитьОписанияСобытий(value);
-                ЗаполнитьРеализацииСобытий(value);
+                //     FillEventDescription(value);
+                FillEventRealization(value);
             }
 
-
-
-            var ОписанияСобытия = ДляОписанияСобытия.ToString();
-            var РеализацииСобытий = ДляРеализацииСобытия.ToString();
-            var ListEvents = EventsName.ToString();
-
-            var СтрокаМодуля = string.Format(ШаблонКласса.Template, ИмяКласса, ТипРеальногоОбъекта, ОписанияСобытия, РеализацииСобытий, ListEvents);
-            return СтрокаМодуля;
+            return string.Format(ШаблонКласса.Template, _className, realType, _eventDescription, _eventBody, _eventsName); 
         }
 
-        public static string ПолучитьКодКлассаВрапера(Type тип)
+        public static string GetWrapCode(Type type)
         {
-            var ДСМВ = new WrapperModuleCreater();
-            string строкаКласса = ДСМВ.СоздатьОписания(тип);
-            return строкаКласса;
+            var creator = new WrapperModuleCreator();
+            return creator.CreateDescription(type);
         }
 
-        public static string GetCodeModuleEventWrapper(Type type)
-        {
-            return ПолучитьКодКлассаВрапера(type);
-        }
+        public static string GetCodeModuleEventWrapper(Type type) => GetWrapCode(type);
     }
 }

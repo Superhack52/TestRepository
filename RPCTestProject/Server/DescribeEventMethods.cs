@@ -37,8 +37,8 @@
             }
             else
             {
-                string str = @"//  параметр value:Анонимный Тип
-                       // Свойства параметра";
+                string str = @"//  параметр value:Анонимный Type
+                       // Properties параметра";
                 _eventMethod.AppendLine(str);
                 foreach (var свойство in value)
                 {
