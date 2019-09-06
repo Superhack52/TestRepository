@@ -14,7 +14,6 @@
         CallFuncAsync,
         CallDelegate,
         CallGenericFunc,
-        GetWrapperForObjectWithEvents,
         SetIndex,
         GetIndex,
         CallBinaryOperation,

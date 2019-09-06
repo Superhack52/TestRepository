@@ -41,26 +41,26 @@ namespace Client
         internal Dictionary<Guid, WrapperObjectWithEvents> EventDictionary =>
             _eventDictionary ?? (_eventDictionary = new Dictionary<Guid, WrapperObjectWithEvents>());
 
-        public static TCPClientConnector LoadAndConnectToLocalServer(string fileName)
-        {
-            int port = 1025;
+        //public static TCPClientConnector LoadAndConnectToLocalServer(string fileName)
+        //{
+        //    int port = 1025;
 
-            port = GetAvailablePort(port);
-            ProcessStartInfo startInfo = new ProcessStartInfo("dotnet.exe")
-            {
-                Arguments = @"""" + fileName + $@""" {port}"
-            };
+        //    port = GetAvailablePort(port);
+        //    ProcessStartInfo startInfo = new ProcessStartInfo("dotnet.exe")
+        //    {
+        //        Arguments = @"""" + fileName + $@""" {port}"
+        //    };
 
-            Console.WriteLine(startInfo.Arguments);
-            Console.WriteLine(Process.Start(startInfo));
+        //    Console.WriteLine(startInfo.Arguments);
+        //    Console.WriteLine(Process.Start(startInfo));
 
-            port++;
-            port = GetAvailablePort(port);
-            var connector = new TCPClientConnector("127.0.0.1", port);
-            connector.Open(port, 2);
+        //    port++;
+        //    port = GetAvailablePort(port);
+        //    var connector = new TCPClientConnector("127.0.0.1", port);
+        //    connector.Open(port, 2);
 
-            return connector;
-        }
+        //    return connector;
+        //}
 
         public static int GetAvailablePort(int port)
         {
@@ -77,7 +77,6 @@ namespace Client
         }
 
         // Откроем порт и количество слушющих задач которое обычно равно подсоединенным устройствам
-        // Нужно учитывть, что 1С обрабатывает все события последовательно ставя события в очередь
         public void Open(int port, int countListener)
         {
             _isClosed = false;
@@ -86,8 +85,7 @@ namespace Client
             _server.Start();
 
             // Создадим задачи для прослушивания порта
-            //При подключении клиента запустим метод ОбработкаСоединения
-            // Подсмотрено здесь https://github.com/imatitya/netcorersi/blob/master/src/NETCoreRemoveServices.Core/Hosting/TcpServerListener.cs
+            // При подключении клиента запустим метод ОбработкаСоединения
             for (int i = 0; i < countListener; i++) _server.AcceptTcpClientAsync().ContinueWith(OnConnect);
         }
 

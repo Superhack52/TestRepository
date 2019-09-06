@@ -10,21 +10,21 @@
             Console.OutputEncoding = System.Text.Encoding.UTF8;
             int port = 6891;
             Console.WriteLine("Hello Client!");
-            bool loadLocalServer = false;
+            //bool loadLocalServer = false;
             TCPClientConnector connector;
 
-            string dir = string.Empty;
-            if (loadLocalServer)
-                connector = TCPClientConnector.LoadAndConnectToLocalServer(
-                    GetParentDir(dir, 4) + $@"\Server\bin\Debug\netcoreapp2.2\Server.dll");
-            else
-            {
+            //string dir = string.Empty;
+            //if (loadLocalServer)
+            //    connector = TCPClientConnector.LoadAndConnectToLocalServer(
+                    //GetParentDir(dir, 4) + $@"\Server\bin\Debug\netcoreapp2.2\Server.dll");
+            //else
+            //{
                 //3 параметр отвечает за признак  постоянного соединения с сервером
                 //Используется пул из 5 соединений
                 connector = new TCPClientConnector("127.0.0.1", port, false);
                 port = TCPClientConnector.GetAvailablePort(6892);
                 connector.Open(port, 2);
-            }
+            //}
 
             _wrap = AutoWrapClient.GetProxy(connector);
             // Выведем сообщение в консоли сервера
@@ -40,6 +40,8 @@
                 console.WriteLine(str);
             }
 
+            var testClass = (_wrap.GetType("TestClass, Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"))._new();
+            testClass.Name();
             GC.Collect();
             GC.WaitForPendingFinalizers();
             Console.WriteLine("Press any key");
@@ -54,7 +56,8 @@
 
             // Если мы запустили процесс сервера
             // То выгрузим его
-            if (loadLocalServer) connector.CloseServer();
+            //if (loadLocalServer)
+                connector.CloseServer();
 
             Console.ReadKey();
         }

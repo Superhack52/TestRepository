@@ -1,4 +1,5 @@
 ﻿using System;
+using TestLibrary;
 
 internal class Program
 {
@@ -13,9 +14,20 @@ internal class Program
         }
 
         Console.WriteLine("Port=" + port);
+        Console.WriteLine(typeof(TestClass).AssemblyQualifiedName);
 
         var server = new ServerRPC.TCPConnector();
         server.Open(port);
         server.WaitIsRunning.Task.Wait();
+    }
+}
+
+public class TestClass //: ITestClassInterface
+{
+    public int Id { get; set; }
+
+    public void Name()
+    {
+        Console.WriteLine("Значение из тестового примера.");
     }
 }

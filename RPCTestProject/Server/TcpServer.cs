@@ -8,6 +8,7 @@
     using System.Net;
     using System.Net.Sockets;
     using System.Reflection;
+    using System.Threading;
     using System.Threading.Tasks;
 
     public enum CallMethod : byte
@@ -18,7 +19,6 @@
         CallFuncAsync,
         CallDelegate,
         CallGenericFunc,
-        GetWrapperForObjectWithEvents,
         SetIndex,
         GetIndex,
         CallBinaryOperation,
@@ -135,6 +135,7 @@
         {
             using (BinaryReader br = new BinaryReader(ms))
             {
+                Task.Delay(100000);
                 var msRes = new MemoryStream();
                 using (BinaryWriter bw = new BinaryWriter(msRes))
                 {
@@ -352,6 +353,7 @@
 
         public static void CallAsFunc(BinaryReader br, BinaryWriter bw)
         {
+            Thread.Sleep(20000);
             CallAsFuncAll(br, bw, out var result, true);
         }
 
