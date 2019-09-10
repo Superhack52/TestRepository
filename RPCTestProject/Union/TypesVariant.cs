@@ -62,7 +62,7 @@ namespace Union
             };
         }
 
-        public static object GetObject(BinaryReader stream, TCPClientConnector connector)
+        public static object GetObject(BinaryReader stream, TcpConnector connector)
         {
             // Считываем тип объекта
             EnumVar type = (EnumVar)stream.ReadByte();

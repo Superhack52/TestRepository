@@ -27,7 +27,7 @@ namespace Union
     /// </summary>
     internal class WrapperObjectWithEvents
     {
-        public WrapperObjectWithEvents(dynamic target, TCPClientConnector connector)
+        public WrapperObjectWithEvents(dynamic target, TcpConnector connector)
         {
             _target = target;
             _connector = connector;
@@ -78,7 +78,7 @@ namespace Union
         }
 
         private dynamic _target;
-        private TCPClientConnector _connector;
+        private TcpConnector _connector;
 
         // Словарь EventKey и EventEmitter
         private Dictionary<Guid, EventEmitter> _eventEmittersList = new Dictionary<Guid, EventEmitter>();

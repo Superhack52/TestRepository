@@ -25,11 +25,11 @@ namespace Union
 
     public class AutoWapEnumerator : IEnumerator
     {
-        private readonly TCPClientConnector _connector;
+        private readonly TcpConnector _connector;
         private readonly AutoWrapClient _enumerator;
         public object Current { get; set; }
 
-        public AutoWapEnumerator(AutoWrapClient target, TCPClientConnector connector)
+        public AutoWapEnumerator(AutoWrapClient target, TcpConnector connector)
         {
             _connector = connector;
 
@@ -79,13 +79,13 @@ namespace Union
 
     public class AutoWrapClient : DynamicObject, IEnumerable, IDisposable
     {
-        public AutoWrapClient(int target, TCPClientConnector connector)
+        public AutoWrapClient(int target, TcpConnector connector)
         {
             Target = target;
             Connector = connector;
         }
 
-        public static dynamic GetProxy(TCPClientConnector connector)
+        public static dynamic GetProxy(TcpConnector connector)
         {
             return new AutoWrapClient(0, connector);
         }
@@ -119,7 +119,7 @@ namespace Union
         }
 
         internal static bool TryInvokeMember(int target, string methodName, object[] args, out object result,
-            TCPClientConnector connector)
+            TcpConnector connector)
         {
             result = null;
 
@@ -138,7 +138,7 @@ namespace Union
             return GetResultWithChangeParams(connector.SendMessage(ms), ref result, connector, args);
         }
 
-        internal static bool TryInvokeGenericMethod(int target, string methodName, object[] args, out object result, TCPClientConnector connector)
+        internal static bool TryInvokeGenericMethod(int target, string methodName, object[] args, out object result, TcpConnector connector)
         {
             var ms = new MemoryStream();
             var bw = new BinaryWriter(ms);
@@ -163,7 +163,7 @@ namespace Union
             return GetResultWithChangeParams(res, ref result, connector, args, 1);
         }
 
-        internal static bool GetResultWithChangeParams(BinaryReader res, ref object result, TCPClientConnector connector,
+        internal static bool GetResultWithChangeParams(BinaryReader res, ref object result, TcpConnector connector,
             object[] args, int offset = 0)
         {
             if (!GetResult(res, ref result, connector)) return false;
@@ -184,7 +184,7 @@ namespace Union
             return true;
         }
 
-        internal static bool GetResult(BinaryReader res, ref object result, TCPClientConnector connector)
+        internal static bool GetResult(BinaryReader res, ref object result, TcpConnector connector)
         {
             var resRun = res.ReadBoolean();
             var returnValue = WorkVariants.GetObject(res, connector);
@@ -199,7 +199,7 @@ namespace Union
         }
 
         internal static void GetAsyncResult(BinaryReader res, TaskCompletionSource<object> result,
-            TCPClientConnector connector)
+            TcpConnector connector)
         {
             object asynchronous = null;
             if (!GetResult(res, ref asynchronous, connector)) result.SetException(new Exception(connector.LastError));
@@ -403,17 +403,17 @@ namespace Union
         #endregion Dynamic override
 
         public readonly int Target;
-        protected readonly TCPClientConnector Connector;
+        protected readonly TcpConnector Connector;
         private bool _isDisposed;
         private static readonly object FlagDeleteObject = new object();
     }
 
     public class AsyncAutoWrapClient : AutoWrapClient
     {
-        public AsyncAutoWrapClient(int target, TCPClientConnector connector) : base(target, connector)
+        public AsyncAutoWrapClient(int target, TcpConnector connector) : base(target, connector)
             => GC.SuppressFinalize(this);
 
-        private static bool TryAsyncInvokeMember(int target, string methodName, object[] args, out object result, TCPClientConnector connector)
+        private static bool TryAsyncInvokeMember(int target, string methodName, object[] args, out object result, TcpConnector connector)
         {
             var tcs = new TaskCompletionSource<object>();
 

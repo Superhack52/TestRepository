@@ -17,8 +17,9 @@ namespace ServerRun
 
             Console.WriteLine("Port=" + port);
 
-            var server = new TCPConnector();
-            server.Open(port);
+            var server = new TcpConnector();
+            server.OpenServer(port);
+
             server.WaitIsRunning.Task.Wait();
         }
     }
