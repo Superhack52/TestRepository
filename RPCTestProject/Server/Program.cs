@@ -26,8 +26,10 @@ public class TestClass //: ITestClassInterface
 {
     public int Id { get; set; }
 
-    public void Name()
+    public string Name()
     {
-        Console.WriteLine("Значение из тестового примера.");
+        var value = "Значение из тестового примера.";
+        Console.WriteLine(value);
+        return value;
     }
 }

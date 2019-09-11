@@ -41,7 +41,9 @@
             }
 
             var testClass = (_wrap.GetType("TestClass, Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"))._new();
-            testClass.Name();
+            var text = testClass.Name();
+            Console.WriteLine("Текст из клиента + " + text);
+            console.WriteLine(text);
             GC.Collect();
             GC.WaitForPendingFinalizers();
             Console.WriteLine("Press any key");

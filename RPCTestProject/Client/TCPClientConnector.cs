@@ -86,7 +86,7 @@ namespace Client
 
             // Создадим задачи для прослушивания порта
             // При подключении клиента запустим метод ОбработкаСоединения
-            for (int i = 0; i < countListener; i++) _server.AcceptTcpClientAsync().ContinueWith(OnConnect);
+            //for (int i = 0; i < countListener; i++) _server.AcceptTcpClientAsync().ContinueWith(OnConnect);
         }
 
         // Закроем ресурсы

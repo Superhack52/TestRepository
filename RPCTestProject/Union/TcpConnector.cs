@@ -66,11 +66,12 @@ namespace Union
 
     public class TcpConnector
     {
-
         #region ctor
 
-        public TcpConnector() { }
-        
+        public TcpConnector()
+        {
+        }
+
         public TcpConnector(string serverAddress, int port, bool keepConnection)
         {
             _keepConnection = keepConnection;
@@ -86,48 +87,121 @@ namespace Union
 
         #endregion ctor
 
-        #region Client
-
-        internal Dictionary<Guid, WrapperObjectWithEvents> EventDictionary =>
-            _eventDictionary ?? (_eventDictionary = new Dictionary<Guid, WrapperObjectWithEvents>());
-
-        public static int GetAvailablePort(int port)
-        {
-            var set = new HashSet<int>(IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpConnections()
-                .Select(tcp => tcp.LocalEndPoint.Port)
-            );
-
-            for (var i = port; i < 49152; i++)
-            {
-                if (!set.Contains(i)) return i;
-            }
-
-            return port;
-        }
-
-        public void OpenClient(int port, int countListener)
+        public void Open(int port, int countListener)
         {
             _isClosed = false;
             PortForCallBack = port;
             _server = new TcpListener(new IPEndPoint(IPAddress.Any, port));
             _server.Start();
 
-            // Создадим задачи для прослушивания порта
-            // При подключении клиента запустим метод ОбработкаСоединения
-            for (int i = 0; i < countListener; i++) _server.AcceptTcpClientAsync().ContinueWith(OnConnectClient);
+            for (int i = 0; i < countListener; i++) _server.AcceptTcpClientAsync().ContinueWith(OnConnect);
         }
 
-        public void CloseClient()
+        private void OnConnect(Task<TcpClient> task)
         {
-            if (_server != null)
+            if (task.IsFaulted || task.IsCanceled) return;
+            TcpClient client = task.Result;
+            ExecuteMethodKeepConnection(client);
+
+            if (!_isClosed) _server.AcceptTcpClientAsync().ContinueWith(OnConnect);
+        }
+
+        private void ExecuteMethodKeepConnection(TcpClient client)
+        {
+            try
             {
-                CloseEvents();
-                _isClosed = true;
-                _server.Stop();
-                _server = null;
+                NetworkStream ns = client.GetStream();
+                var address = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+
+                while (true)
+                {
+                    var notKeepConnection = ns.ReadByte();
+                    var streamSize = BitConverter.ToInt32(GetByteArrayFromStream(ns, 4), 0);
+
+                    if (streamSize > 0)
+                    {
+                        var ms = new MemoryStream(GetByteArrayFromStream(ns, streamSize));
+                        ms.Position = 0;
+                        RunMethod(ns, ms, address);
+                    }
+
+                    if (notKeepConnection == 1)
+                    {
+                        client.Dispose();
+                        return;
+                    }
+                }
+            }
+            catch (IOException)
+            {
+                client.Dispose();
+            }
+        }
+
+        #region Client
+
+        public static int GetAvailablePort(int port)
+        {
+            var ports = new HashSet<int>(IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners().Select(tcp => tcp.Port));
+            for (var i = port; i < 49152; i++)
+            {
+                if (!ports.Contains(i)) return i;
             }
 
-            CloseConnection();
+            return port;
+        }
+
+        private void RunMethod(NetworkStream ns, MemoryStream ms, IPAddress adress)
+        {
+            using (BinaryReader br = new BinaryReader(ms))
+            {
+                var msRes = new MemoryStream();
+                using (BinaryWriter bw = new BinaryWriter(msRes))
+                {
+                    var cm = (CallMethod)br.ReadByte();
+
+                    switch (cm)
+                    {
+                        case CallMethod.CallFunc: CallAsFunc(br, bw); break;
+                        case CallMethod.GetMember: GetPropVal(br, bw); break;
+                        case CallMethod.SetMember: SetPropVal(br, bw); break;
+                        case CallMethod.CallFuncAsync: CallAsyncFunc(br, bw, adress); break;
+                        case CallMethod.CallDelegate: CallAsDelegate(br, bw); break;
+                        case CallMethod.CallGenericFunc: CallAsGenericFunc(br, bw); break;
+                        case CallMethod.GetIndex: GetIndex(br, bw); break;
+                        case CallMethod.SetIndex: SetIndex(br, bw); break;
+                        case CallMethod.IteratorNext: IteratorNext(br, bw); break;
+                        case CallMethod.DeleteObjects: DeleteObjects(br, bw); break;
+                        case CallMethod.CallBinaryOperation: CallBinaryOperation(br, bw); break;
+                        case CallMethod.CallUnaryOperation: CallUnaryOperation(br, bw); break;
+                        case CallMethod.CloseServer:
+                            {
+                                bw.Write(false);
+                                bw.Flush();
+                                SetResult(msRes, ns);
+
+                                CloseServer();
+                                WaitIsRunning.SetResult(1);
+                                return;
+                            }
+                    }
+
+                    bw.Flush();
+                    SetResult(msRes, ns);
+                }
+            }
+        }
+
+        private static byte[] GetByteArrayFromStream(NetworkStream ns, int length)
+        {
+            byte[] result = new byte[length];
+            int readBytes = 0;
+            while (length > readBytes)
+            {
+                readBytes += ns.Read(result, readBytes, length - readBytes);
+            }
+
+            return result;
         }
 
         private void CloseConnection()
@@ -162,18 +236,8 @@ namespace Union
 
         public void CloseServerClient()
         {
-            CloseEvents();
-
             ServerIsClosed = true;
             SendCloseServer();
-        }
-
-        // Отошлем все ссылки для удаления объектов из  хранилища
-
-        private void CloseEvents()
-        {
-            foreach (var eventWrap in EventDictionary.Values.Distinct().ToArray())
-                eventWrap.Close();
         }
 
         public void ClearDeletedObject()
@@ -204,7 +268,6 @@ namespace Union
             object result = null;
             if (!AutoWrapClient.GetResult(res, ref result, this)) throw new Exception(LastError);
         }
-
 
         // Добавим ссылку на объект на сервере в буффер
         // И если в буфере количество больше заданного
@@ -272,192 +335,9 @@ namespace Union
             }
         }
 
-        private void OnConnectClient(Task<TcpClient> task)
-        {
-            if (task.IsFaulted || task.IsCanceled)
-            {
-                // Скорее всего вызвано  Server.Stop();
-                return;
-            }
-
-            // Получим клиента
-            TcpClient client = task.Result;
-
-            // И вызовем метод для обработки данных
-            //
-            ExecuteMethod(client);
-
-            // Если Server не закрыт то запускаем нового слушателя
-            if (!_isClosed) _server.AcceptTcpClientAsync().ContinueWith(OnConnectClient);
-        }
-
-        private void ExecuteMethod(TcpClient client)
-        {
-            using (NetworkStream ns = client.GetStream())
-            {
-                //Получим данные с клиента и на основании этих данных
-                //Создадим ДанныеДляКлиета1С котрый кроме данных содержит
-                //TcpClient для отправки ответа
-                using (var br = new BinaryReader(ns))
-                {
-                    RunMethod(new MemoryStream(br.ReadBytes(br.ReadInt32())) { Position = 0 });
-                }
-            }
-        }
-
-        private void RunMethod(MemoryStream ms)
-        {
-            using (BinaryReader br = new BinaryReader(ms))
-            {
-                switch (br.ReadByte())
-                {
-                    case 0: SetAsyncResult(br); break;
-                    case 1: SetEvent(br); break;
-                }
-            }
-        }
-
-        private void SetAsyncResult(BinaryReader br)
-        {
-            Guid key = new Guid(br.ReadBytes(16));
-            var res = br.ReadBoolean();
-            var resObj = WorkVariants.GetObject(br, this);
-            TaskCompletionSource<object> value;
-            if (AsyncDictionary.TryGetValue(key, out value))
-            {
-                if (res) value.SetResult(resObj);
-                else value.TrySetException(new Exception((string)resObj));
-            }
-        }
-
-        private void SetEvent(BinaryReader br)
-        {
-            Guid key = new Guid(br.ReadBytes(16));
-            var res = WorkVariants.GetObject(br, this);
-            WrapperObjectWithEvents value;
-            if (EventDictionary.TryGetValue(key, out value))
-                value.RaiseEvent(key, res);
-        }
-
         #endregion Client
 
         #region Server
-
-        public void OpenServer(int portNumber = 6891, int listenerCount = 15)
-        {
-            _isClosed = false;
-
-            IPEndPoint ipEndpoint = new IPEndPoint(IPAddress.Any, portNumber);
-            _server = new TcpListener(ipEndpoint);
-            _server.Start();
-            for (int i = 0; i < listenerCount; i++) _server.AcceptTcpClientAsync().ContinueWith(OnConnectServer);
-        }
-
-        private void OnConnectServer(Task<TcpClient> task)
-        {
-            if (task.IsFaulted || task.IsCanceled)
-            {
-                // Скорее всего вызвано  Server.Stop();
-                return;
-            }
-
-            // Получим клиента
-            TcpClient client = task.Result;
-
-            // И вызовем метод для обработки данных
-            //
-            ExecuteMethodKeepConnection(client);
-
-            // Если Server не закрыт то запускаем нового слушателя
-            if (!_isClosed) _server.AcceptTcpClientAsync().ContinueWith(OnConnectServer);
-        }
-
-
-        private void RunMethod(NetworkStream ns, MemoryStream ms, IPAddress adress)
-        {
-            using (BinaryReader br = new BinaryReader(ms))
-            {
-                var msRes = new MemoryStream();
-                using (BinaryWriter bw = new BinaryWriter(msRes))
-                {
-                    var cm = (CallMethod)br.ReadByte();
-
-                    switch (cm)
-                    {
-                        case CallMethod.CallFunc: CallAsFunc(br, bw); break;
-                        case CallMethod.GetMember: GetPropVal(br, bw); break;
-                        case CallMethod.SetMember: SetPropVal(br, bw); break;
-                        case CallMethod.CallFuncAsync: CallAsyncFunc(br, bw, adress); break;
-                        case CallMethod.CallDelegate: CallAsDelegate(br, bw); break;
-                        case CallMethod.CallGenericFunc: CallAsGenericFunc(br, bw); break;
-                        case CallMethod.GetIndex: GetIndex(br, bw); break;
-                        case CallMethod.SetIndex: SetIndex(br, bw); break;
-                        case CallMethod.IteratorNext: IteratorNext(br, bw); break;
-                        case CallMethod.DeleteObjects: DeleteObjects(br, bw); break;
-                        case CallMethod.CallBinaryOperation: CallBinaryOperation(br, bw); break;
-                        case CallMethod.CallUnaryOperation: CallUnaryOperation(br, bw); break;
-                        case CallMethod.CloseServer:
-                        {
-                            bw.Write(false);
-                            bw.Flush();
-                            SetResult(msRes, ns);
-
-                            CloseServer();
-                            WaitIsRunning.SetResult(1);
-                            return;
-                        }
-                    }
-
-                    bw.Flush();
-                    SetResult(msRes, ns);
-                }
-            }
-        }
-
-        private static byte[] GetByteArrayFromStream(NetworkStream ns, int length)
-        {
-            byte[] result = new byte[length];
-            int readBytes = 0;
-            while (length > readBytes)
-            {
-                readBytes += ns.Read(result, readBytes, length - readBytes);
-            }
-
-            return result;
-        }
-
-        private void ExecuteMethodKeepConnection(TcpClient client)
-        {
-            try
-            {
-                NetworkStream ns = client.GetStream();
-                var address = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
-
-                while (true)
-                {
-                    // переделать на  ns.ReadAsync;
-                    var NotKeepConnection = ns.ReadByte();
-                    var streamSize = BitConverter.ToInt32(GetByteArrayFromStream(ns, 4), 0);
-
-                    if (streamSize > 0)
-                    {
-                        var ms = new MemoryStream(GetByteArrayFromStream(ns, streamSize));
-                        ms.Position = 0;
-                        RunMethod(ns, ms, address);
-                    }
-
-                    if (NotKeepConnection == 1)
-                    {
-                        client.Dispose();
-                        return;
-                    }
-                }
-            }
-            catch (IOException)
-            {
-                client.Dispose();
-            }
-        }
 
         // Закроем ресурсы
         public void CloseServer()
@@ -469,6 +349,8 @@ namespace Union
                 _server = null;
             }
         }
+
+        #region Call members
 
         private static void SetError(string errorStr, BinaryWriter bw)
         {
@@ -858,13 +740,18 @@ namespace Union
 
             var args = new[] { autoWrap.Object };
             CallStaticMethod(bw, autoWrap.Type, methodName, args);
+
+            #endregion Call members
         }
+
         #endregion Server
 
         //server
         private TcpListener _server;
+
         // Устанавливаем флаг при закрытии
         private bool _isClosed;
+
         public readonly TaskCompletionSource<int> WaitIsRunning = new TaskCompletionSource<int>();
 
         // Client
@@ -875,12 +762,12 @@ namespace Union
         private IPEndPoint _ipEndpoint;
         private BlockingCollection<NetworkStream> _nsQueue;
         internal Dictionary<Guid, TaskCompletionSource<object>> AsyncDictionary;
-        private Dictionary<Guid, WrapperObjectWithEvents> _eventDictionary;
 
         // Список для удаления объектов
         //Для уменьшения затрат на межпроцессное взаимодействие будем отправлть
         //Запрос на удаление из хранилища не по 1 объект а пачками количество указанным  в CountDeletedObjects
         private List<int> _deletedObjects;
+
         private int _countDeletedObjects;
         internal string LastError;
     }

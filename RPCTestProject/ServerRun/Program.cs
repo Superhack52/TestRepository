@@ -16,11 +16,23 @@ namespace ServerRun
             }
 
             Console.WriteLine("Port=" + port);
+            Console.WriteLine(typeof(TestClass).AssemblyQualifiedName);
 
             var server = new TcpConnector();
-            server.OpenServer(port);
+            server.Open(port, 2);
 
             server.WaitIsRunning.Task.Wait();
+        }
+    }
+    public class TestClass //: ITestClassInterface
+    {
+        public int Id { get; set; }
+
+        public string Name()
+        {
+            var value = "Значение из тестового примера.";
+            Console.WriteLine(value);
+            return value;
         }
     }
 }

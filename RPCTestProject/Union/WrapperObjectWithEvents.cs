@@ -45,37 +45,37 @@ namespace Union
             if (_eventEmittersList.TryGetValue(eventKey, out @event)) @event.Emit(value);
         }
 
-        public void AddEventHandler(string eventName, Action<dynamic> eventHandler)
-        {
-            var isFirst = false;
+        //public void AddEventHandler(string eventName, Action<dynamic> eventHandler)
+        //{
+        //    var isFirst = false;
 
-            if (!this._eventsList.TryGetValue(eventName, out var eventItem))
-            {
-                var eventKey = Guid.NewGuid();
-                var @event = new EventEmitter();
-                eventItem = new EventItem(eventKey, @event);
-                _eventsList.Add(eventName, eventItem);
-                _eventEmittersList.Add(eventKey, @event);
-                _connector.EventDictionary.Add(eventKey, this);
-                isFirst = true;
-            }
+        //    if (!this._eventsList.TryGetValue(eventName, out var eventItem))
+        //    {
+        //        var eventKey = Guid.NewGuid();
+        //        var @event = new EventEmitter();
+        //        eventItem = new EventItem(eventKey, @event);
+        //        _eventsList.Add(eventName, eventItem);
+        //        _eventEmittersList.Add(eventKey, @event);
+        //        _connector.EventDictionary.Add(eventKey, this);
+        //        isFirst = true;
+        //    }
 
-            eventItem.Event.Subject += eventHandler;
-            if (isFirst) _target.AddEventHandler(eventItem.EventKey, eventName);
-        }
+        //    eventItem.Event.Subject += eventHandler;
+        //    if (isFirst) _target.AddEventHandler(eventItem.EventKey, eventName);
+        //}
 
-        public void Close()
-        {
-            this.RemoveAllEventHandler();
-        }
+        //public void Close()
+        //{
+        //    this.RemoveAllEventHandler();
+        //}
 
-        public void RemoveAllEventHandler()
-        {
-            foreach (var ei in _eventsList.Values) _connector.EventDictionary.Remove(ei.EventKey);
+        //public void RemoveAllEventHandler()
+        //{
+        //    foreach (var ei in _eventsList.Values) _connector.EventDictionary.Remove(ei.EventKey);
 
-            _eventsList.Clear();
-            _eventEmittersList.Clear();
-        }
+        //    _eventsList.Clear();
+        //    _eventEmittersList.Clear();
+        //}
 
         private dynamic _target;
         private TcpConnector _connector;
