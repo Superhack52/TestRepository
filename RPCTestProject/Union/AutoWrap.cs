@@ -1,10 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Reflection;
-
-namespace Union
+﻿namespace Union
 {
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Reflection;
+
     public class AutoWrap
     {
         // Хранилище где будем хранить объекты

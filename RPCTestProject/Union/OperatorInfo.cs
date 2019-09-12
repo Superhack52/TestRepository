@@ -1,95 +1,53 @@
-﻿using System.Collections.Generic;
-using System.Linq.Expressions;
-
-namespace Union
+﻿namespace Union
 {
+    using System.Collections.Generic;
+    using System.Linq.Expressions;
+
     public static class OperatorInfo
     {
         public static Dictionary<ExpressionType, string> OperatorMatches = MakeOperatorTable();
 
         private static Dictionary<ExpressionType, string> MakeOperatorTable()
         {
-            var res = new Dictionary<ExpressionType, string>();
-
-            // unary ExpressionType as defined in Partition I Architecture 9.3.1:
-
-            res[ExpressionType.Decrement] = "op_Decrement";      // --
-
-            res[ExpressionType.Increment] = "op_Increment";      // ++
-
-            res[ExpressionType.Negate] = "op_UnaryNegation";         // - (unary)
-
-            res[ExpressionType.UnaryPlus] = "op_UnaryPlus";           // + (unary)
-
-            res[ExpressionType.Not] = "op_LogicalNot";             // !
-
-            res[ExpressionType.IsTrue] = "op_True";             // not defined
-
-            res[ExpressionType.IsFalse] = "op_False";             // not defined
-
-            //res.Add(AddressOf,           "op_AddressOf",                 null);             // & (unary)
-
-            res[ExpressionType.OnesComplement] = "op_OnesComplement"; // ~
-
-            //res.Add(PointerDereference,  "op_PointerDereference",        null);             // * (unary)
-
-            // binary ExpressionType as defined in Partition I Architecture 9.3.2:
-
-            res[ExpressionType.Add] = "op_Addition";           // +
-
-            res[ExpressionType.Subtract] = "op_Subtraction";       // -
-
-            res[ExpressionType.Multiply] = "op_Multiply";       // *
-
-            res[ExpressionType.Divide] = "op_Division";         // /
-
-            res[ExpressionType.Modulo] = "op_Modulus";            // %
-
-            res[ExpressionType.ExclusiveOr] = "op_ExclusiveOr";    // ^
-
-            res[ExpressionType.And] = "op_BitwiseAnd";     // &
-
-            res[ExpressionType.Or] = "op_BitwiseOr";      // |
-
-            res[ExpressionType.And] = "op_LogicalAnd";            // &&
-
-            res[ExpressionType.Or] = "op_LogicalOr";             // ||
-
-            res[ExpressionType.LeftShift] = "op_LeftShift";      // <<
-
-            res[ExpressionType.RightShift] = "op_RightShift";     // >>
-
-            res[ExpressionType.Equal] = "op_Equality";         // ==
-
-            res[ExpressionType.GreaterThan] = "op_GreaterThan";    // >
-
-            res[ExpressionType.LessThan] = "op_LessThan";       // <
-
-            res[ExpressionType.NotEqual] = "op_Inequality";      // !=
-
-            res[ExpressionType.GreaterThanOrEqual] = "op_GreaterThanOrEqual";        // >=
-
-            res[ExpressionType.LessThanOrEqual] = "op_LessThanOrEqual";        // <=
-
-            res[ExpressionType.MultiplyAssign] = "op_MultiplicationAssignment";       // *=
-
-            res[ExpressionType.SubtractAssign] = "op_SubtractionAssignment";       // -=
-
-            res[ExpressionType.ExclusiveOrAssign] = "op_ExclusiveOrAssignment";            // ^=
-
-            res[ExpressionType.LeftShiftAssign] = "op_LeftShiftAssignment";      // <<=
-
-            res[ExpressionType.RightShiftAssign] = "op_RightShiftAssignment";     // >>=
-
-            res[ExpressionType.ModuloAssign] = "op_ModulusAssignment";            // %=
-
-            res[ExpressionType.AddAssign] = "op_AdditionAssignment";            // +=
-
-            res[ExpressionType.AndAssign] = "op_BitwiseAndAssignment";     // &=
-
-            res[ExpressionType.OrAssign] = "op_BitwiseOrAssignment";      // |=
-
-            res[ExpressionType.DivideAssign] = "op_DivisionAssignment";         // /=
+            var res = new Dictionary<ExpressionType, string>
+            {
+                [ExpressionType.Decrement] = "op_Decrement",
+                [ExpressionType.Increment] = "op_Increment",
+                [ExpressionType.Negate] = "op_UnaryNegation",
+                [ExpressionType.UnaryPlus] = "op_UnaryPlus",
+                [ExpressionType.Not] = "op_LogicalNot",
+                [ExpressionType.IsTrue] = "op_True",
+                [ExpressionType.IsFalse] = "op_False",
+                [ExpressionType.OnesComplement] = "op_OnesComplement",
+                [ExpressionType.Add] = "op_Addition",
+                [ExpressionType.Subtract] = "op_Subtraction",
+                [ExpressionType.Multiply] = "op_Multiply",
+                [ExpressionType.Divide] = "op_Division",
+                [ExpressionType.Modulo] = "op_Modulus",
+                [ExpressionType.ExclusiveOr] = "op_ExclusiveOr",
+                [ExpressionType.And] = "op_BitwiseAnd",
+                [ExpressionType.Or] = "op_BitwiseOr",
+                [ExpressionType.And] = "op_LogicalAnd",
+                [ExpressionType.Or] = "op_LogicalOr",
+                [ExpressionType.LeftShift] = "op_LeftShift",
+                [ExpressionType.RightShift] = "op_RightShift",
+                [ExpressionType.Equal] = "op_Equality",
+                [ExpressionType.GreaterThan] = "op_GreaterThan",
+                [ExpressionType.LessThan] = "op_LessThan",
+                [ExpressionType.NotEqual] = "op_Inequality",
+                [ExpressionType.GreaterThanOrEqual] = "op_GreaterThanOrEqual",
+                [ExpressionType.LessThanOrEqual] = "op_LessThanOrEqual",
+                [ExpressionType.MultiplyAssign] = "op_MultiplicationAssignment",
+                [ExpressionType.SubtractAssign] = "op_SubtractionAssignment",
+                [ExpressionType.ExclusiveOrAssign] = "op_ExclusiveOrAssignment",
+                [ExpressionType.LeftShiftAssign] = "op_LeftShiftAssignment",
+                [ExpressionType.RightShiftAssign] = "op_RightShiftAssignment",
+                [ExpressionType.ModuloAssign] = "op_ModulusAssignment",
+                [ExpressionType.AddAssign] = "op_AdditionAssignment",
+                [ExpressionType.AndAssign] = "op_BitwiseAndAssignment",
+                [ExpressionType.OrAssign] = "op_BitwiseOrAssignment",
+                [ExpressionType.DivideAssign] = "op_DivisionAssignment"
+            };
 
             return res;
         }

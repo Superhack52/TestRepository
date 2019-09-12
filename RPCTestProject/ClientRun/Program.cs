@@ -8,15 +8,13 @@ namespace ClientRun
         static void Main(string[] args)
         {
             Console.OutputEncoding = System.Text.Encoding.UTF8;
-            int port = 6891;
+            int serverPort = 6891;
             Console.WriteLine("Hello Client!");
-            TcpConnector connector;
-            connector = new TcpConnector("127.0.0.1", port, false);
-            port = TcpConnector.GetAvailablePort(6892);
-            connector.Open(port, 2);
-            //}
+            TcpConnector client = new TcpConnector();
+            client.Open(TcpConnector.GetAvailablePort(serverPort), 2);
+            client.Connect("127.0.0.1", serverPort);
 
-            _wrap = AutoWrapClient.GetProxy(connector);
+            _wrap = AutoWrapClient.GetProxy(client);
             // Выведем сообщение в консоли сервера
             string typeStr = typeof(Console).AssemblyQualifiedName;
             var console = _wrap.GetType(typeStr);
@@ -37,21 +35,17 @@ namespace ClientRun
 
             GC.Collect();
             GC.WaitForPendingFinalizers();
-            Console.WriteLine("Press any key");
-            Console.ReadKey();
 
             // Удаления из хранилища на стороне сервера происходит пачками по 50 элементов
             // Отрправим оставшиеся
-            connector.ClearDeletedObject();
+            client.ClearDeletedObject();
 
             // Отключимся от сервера, закроем все соединения, Tcp/Ip сервер на клиенте
-            connector.CloseServer();
+            client.Close();
 
-            // Если мы запустили процесс сервера
-            // То выгрузим его
-            //if (loadLocalServer)
-            connector.CloseServerClient();
-
+            Console.Write("Close server? [y][n]: ");
+            if (Console.ReadLine().ToLower().Equals("y")) client.CloseServer();
+            Console.WriteLine("Press any key...");
             Console.ReadKey();
         }
 

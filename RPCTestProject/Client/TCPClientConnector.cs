@@ -1,16 +1,15 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
-using System.Threading.Tasks;
-
-namespace Client
+﻿namespace Client
 {
+    using System;
+    using System.Collections.Concurrent;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Linq;
+    using System.Net;
+    using System.Net.NetworkInformation;
+    using System.Net.Sockets;
+    using System.Threading.Tasks;
+
     public class TCPClientConnector
     {
         //todo
@@ -178,7 +177,6 @@ namespace Client
             if (!AutoWrapClient.GetResult(res, ref result, this)) throw new Exception(LastError);
         }
 
-
         // Добавим ссылку на объект на сервере в буффер
         // И если в буфере количество больше заданного
         // То отсылается массив ссылок, а буфуе очищается
@@ -329,6 +327,7 @@ namespace Client
         //Для уменьшения затрат на межпроцессное взаимодействие будем отправлть
         //Запрос на удаление из хранилища не по 1 объект а пачками количество указанным  в CountDeletedObjects
         private List<int> _deletedObjects;
+
         private int _countDeletedObjects;
     }
 }

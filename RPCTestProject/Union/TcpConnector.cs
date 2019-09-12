@@ -1,25 +1,22 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Net;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
-using System.Reflection;
-using System.Threading.Tasks;
-
-namespace Union
+﻿namespace Union
 {
+    using System;
+    using System.Collections.Concurrent;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Linq;
+    using System.Linq.Expressions;
+    using System.Net;
+    using System.Net.NetworkInformation;
+    using System.Net.Sockets;
+    using System.Reflection;
+    using System.Threading.Tasks;
+
     public class TcpAsyncCallBack
     {
-        public IPEndPoint EndPoint;
-        private Guid _key;
-
         internal TcpAsyncCallBack(Guid key, IPAddress address, int port)
         {
-            EndPoint = new IPEndPoint(address, port);
+            _endPoint = new IPEndPoint(address, port);
             _key = key;
         }
 
@@ -27,7 +24,7 @@ namespace Union
         {
             using (var client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
             {
-                client.Connect(EndPoint);
+                client.Connect(_endPoint);
 
                 using (var ns = new NetworkStream(client))
                 {
@@ -51,46 +48,29 @@ namespace Union
             SendStream(stream);
         }
 
-        internal void SendEvent(Guid eventKey, object result)
-        {
-            MemoryStream stream = new MemoryStream();
-            var bw = new BinaryWriter(stream);
-            bw.Write((byte)1);
-            bw.Write(eventKey.ToByteArray());
-            WorkWithVariant.WriteObject(AutoWrap.WrapObject(result), bw);
-            bw.Flush();
-
-            SendStream(stream);
-        }
+        private readonly IPEndPoint _endPoint;
+        private Guid _key;
     }
 
     public class TcpConnector
     {
-        #region ctor
-
-        public TcpConnector()
+        public bool Connect(string serverIp, int port)
         {
-        }
-
-        public TcpConnector(string serverAddress, int port, bool keepConnection)
-        {
-            _keepConnection = keepConnection;
-            _ipEndpoint = new IPEndPoint(IPAddress.Parse(serverAddress), port);
+            _ipEndpoint = new IPEndPoint(IPAddress.Parse(serverIp), port);
             AsyncDictionary = new Dictionary<Guid, TaskCompletionSource<object>>();
-            _deletedObjects = new List<int>();
 
             var client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             client.Connect(_ipEndpoint);
             var ns = new NetworkStream(client);
             _nsQueue = new BlockingCollection<NetworkStream> { ns };
-        }
 
-        #endregion ctor
+            return client.Connected;
+        }
 
         public void Open(int port, int countListener)
         {
             _isClosed = false;
-            PortForCallBack = port;
+            Property = port;
             _server = new TcpListener(new IPEndPoint(IPAddress.Any, port));
             _server.Start();
 
@@ -120,8 +100,7 @@ namespace Union
 
                     if (streamSize > 0)
                     {
-                        var ms = new MemoryStream(GetByteArrayFromStream(ns, streamSize));
-                        ms.Position = 0;
+                        var ms = new MemoryStream(GetByteArrayFromStream(ns, streamSize)) { Position = 0 };
                         RunMethod(ns, ms, address);
                     }
 
@@ -138,8 +117,6 @@ namespace Union
             }
         }
 
-        #region Client
-
         public static int GetAvailablePort(int port)
         {
             var ports = new HashSet<int>(IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners().Select(tcp => tcp.Port));
@@ -151,7 +128,7 @@ namespace Union
             return port;
         }
 
-        private void RunMethod(NetworkStream ns, MemoryStream ms, IPAddress adress)
+        private void RunMethod(NetworkStream ns, MemoryStream ms, IPAddress address)
         {
             using (BinaryReader br = new BinaryReader(ms))
             {
@@ -165,7 +142,7 @@ namespace Union
                         case CallMethod.CallFunc: CallAsFunc(br, bw); break;
                         case CallMethod.GetMember: GetPropVal(br, bw); break;
                         case CallMethod.SetMember: SetPropVal(br, bw); break;
-                        case CallMethod.CallFuncAsync: CallAsyncFunc(br, bw, adress); break;
+                        case CallMethod.CallFuncAsync: CallAsyncFunc(br, bw, address); break;
                         case CallMethod.CallDelegate: CallAsDelegate(br, bw); break;
                         case CallMethod.CallGenericFunc: CallAsGenericFunc(br, bw); break;
                         case CallMethod.GetIndex: GetIndex(br, bw); break;
@@ -174,13 +151,13 @@ namespace Union
                         case CallMethod.DeleteObjects: DeleteObjects(br, bw); break;
                         case CallMethod.CallBinaryOperation: CallBinaryOperation(br, bw); break;
                         case CallMethod.CallUnaryOperation: CallUnaryOperation(br, bw); break;
-                        case CallMethod.CloseServer:
+                        case CallMethod.Close:
                             {
                                 bw.Write(false);
                                 bw.Flush();
                                 SetResult(msRes, ns);
 
-                                CloseServer();
+                                Close();
                                 WaitIsRunning.SetResult(1);
                                 return;
                             }
@@ -204,49 +181,49 @@ namespace Union
             return result;
         }
 
+        // Закроем ресурсы
+        public void Close()
+        {
+            if (_server != null)
+            {
+                _isClosed = true;
+                _server.Stop();
+                _server = null;
+            }
+
+            CloseConnection();
+        }
+
         private void CloseConnection()
         {
-            if (_keepConnection)
+            if(_nsQueue == null) return;
+            while (_nsQueue.TryTake(out var ns))
             {
-                _keepConnection = false;
-                while (_nsQueue.TryTake(out var ns))
-                {
-                    ns.WriteByte(1); // Признак того, что соединение  разрывать
-                    ns.Write(BitConverter.GetBytes((int)0), 0, 4);
-                    ns.Flush();
-                    ns.Dispose();
-                }
+                ns.WriteByte(1); // Признак того, что соединение  разрывать
+                ns.Write(BitConverter.GetBytes((int)0), 0, 4);
+                ns.Flush();
+                ns.Dispose();
             }
         }
 
         internal BinaryReader SendMessage(MemoryStream stream)
         {
-            if (_keepConnection)
-            {
-                var ns = _nsQueue.Take();
-                var res = SendMessageKeepConnection(stream, ns);
-                _nsQueue.Add(ns);
-                return res;
-            }
-
+            //var ns = _nsQueue.Take();
+            //var res = SendMessageKeepConnection(stream, ns);
+            //_nsQueue.Add(ns);
+            //return res;
             return SendMessageOne(stream);
         }
 
-        public bool ServerIsClosed { get; set; }
-
-        public void CloseServerClient()
-        {
-            ServerIsClosed = true;
-            SendCloseServer();
-        }
+        #region Client
 
         public void ClearDeletedObject()
         {
-            if (ServerIsClosed) return;
+            //if (ServerIsClosed) return;
 
-            lock (syncForDelete)
+            lock (_syncForDelete)
             {
-                if (_deletedObjects.Count > 0) SendDeleteObjects();
+                if (_deletedObjects != null && _deletedObjects.Count > 0) SendDeleteObjects();
             }
         }
 
@@ -275,21 +252,21 @@ namespace Union
         // Сделано, для ускорения действи при межпроцессном взаимодействии
         public void DeleteObject(AutoWrapClient Object)
         {
-            if (ServerIsClosed) return;
+            //if (ServerIsClosed) return;
 
-            lock (syncForDelete)
+            lock (_syncForDelete)
             {
                 _deletedObjects.Add(Object.Target);
                 if (_deletedObjects.Count > _countDeletedObjects) SendDeleteObjects();
             }
         }
 
-        private void SendCloseServer()
+        public void CloseServer()
         {
             var ms = new MemoryStream();
             var bw = new BinaryWriter(ms);
 
-            bw.Write((byte)CallMethod.CloseServer);
+            bw.Write((byte)CallMethod.Close);
             bw.Flush();
 
             SendMessage(ms);
@@ -336,19 +313,6 @@ namespace Union
         }
 
         #endregion Client
-
-        #region Server
-
-        // Закроем ресурсы
-        public void CloseServer()
-        {
-            if (_server != null)
-            {
-                _isClosed = true;
-                _server.Stop();
-                _server = null;
-            }
-        }
 
         #region Call members
 
@@ -744,21 +708,18 @@ namespace Union
             #endregion Call members
         }
 
-        #endregion Server
-
         //server
         private TcpListener _server;
 
         // Устанавливаем флаг при закрытии
         private bool _isClosed;
 
+        public int Property { get; private set; }
         public readonly TaskCompletionSource<int> WaitIsRunning = new TaskCompletionSource<int>();
 
         // Client
-        private object syncForDelete = new object();
+        private object _syncForDelete = new object();
 
-        private bool _keepConnection;
-        public int PortForCallBack;
         private IPEndPoint _ipEndpoint;
         private BlockingCollection<NetworkStream> _nsQueue;
         internal Dictionary<Guid, TaskCompletionSource<object>> AsyncDictionary;

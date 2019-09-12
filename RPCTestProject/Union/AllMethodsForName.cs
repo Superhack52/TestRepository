@@ -215,7 +215,6 @@ namespace Union
                     {
                         // var MethodInfo = метод.GenericMethod.GetRealMethod(genericParameters, methodParameters);
                         var methodInfo = method.GenericMethod.MethodInfo.MakeGenericMethod(genericParameters);
-                        if (methodInfo != null)
                         {
                             var res = new RpcMethodInfo(methodInfo);
                             if (res.Compare(methodParameters)) return res;
@@ -229,7 +228,6 @@ namespace Union
                 if (method.IsGeneric && isStatic == method.Method.IsStatic)
                 {
                     var methodInfo = method.GenericMethod.MethodInfo.MakeGenericMethod(genericParameters);// метод.GenericMethod.GetRealMethod(genericParameters, methodParameters);
-                    if (methodInfo != null)
                     {
                         var res = new RpcMethodInfo(methodInfo);
                         if (res.CompareParams(methodParameters)) return res;

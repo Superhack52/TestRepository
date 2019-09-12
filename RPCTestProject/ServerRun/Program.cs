@@ -20,7 +20,6 @@ namespace ServerRun
 
             var server = new TcpConnector();
             server.Open(port, 2);
-
             server.WaitIsRunning.Task.Wait();
         }
     }

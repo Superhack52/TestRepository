@@ -110,10 +110,6 @@ namespace Union
 
     public class TypedEnumerator : IEnumerable
     {
-        private System.Collections.IEnumerable _enumerator;
-        private TypeInfo _typeInfo;
-        private Type _type;
-
         public TypedEnumerator(IEnumerable enumerator, Type type)
         {
             _enumerator = enumerator;
@@ -131,6 +127,10 @@ namespace Union
                 yield return res;
             }
         }
+
+        private IEnumerable _enumerator;
+        private TypeInfo _typeInfo;
+        private Type _type;
     }
 
     public class AsyncRunner

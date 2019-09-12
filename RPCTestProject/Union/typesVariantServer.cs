@@ -33,25 +33,11 @@ namespace Union
             };
         }
 
-        public static DateTime ReadDateTime(BinaryReader stream)
-        {
-            long nVal = stream.ReadInt64();
-            //get 64bit binary
-            return DateTime.FromBinary(nVal);
-        }
+        public static DateTime ReadDateTime(BinaryReader stream) => DateTime.FromBinary(stream.ReadInt64());
 
-        public static void WriteDateTime(DateTime value, BinaryWriter stream)
-        {
-            long nVal = value.ToBinary();
-            //get 64bit binary
-            stream.Write(nVal);
-        }
+        public static void WriteDateTime(DateTime value, BinaryWriter stream) => stream.Write(value.ToBinary());
 
-        public static byte[] ReadByteArray(BinaryReader stream)
-        {
-            var length = stream.ReadInt32();
-            return stream.ReadBytes(length);
-        }
+        public static byte[] ReadByteArray(BinaryReader stream) => stream.ReadBytes(stream.ReadInt32());
 
         public static object GetObject(BinaryReader stream)
         {

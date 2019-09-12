@@ -1,17 +1,17 @@
-﻿using Microsoft.CSharp.RuntimeBinder;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Dynamic;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace NetObjectToNative
+﻿namespace NetObjectToNative
 {
+    using Microsoft.CSharp.RuntimeBinder;
+    using System;
+    using System.Collections;
+    using System.Collections.Generic;
+    using System.Dynamic;
+    using System.Linq;
+    using System.Linq.Expressions;
+    using System.Reflection;
+    using System.Runtime.CompilerServices;
+    using System.Text;
+    using System.Threading.Tasks;
+
     public class DynamicInvoker
     {
         public static object InvokeMember(object target, string methodName, params object[] args)
@@ -151,7 +151,8 @@ namespace NetObjectToNative
                 error = sb.ToString();
                 return false;
             }
-            else if (task.IsCanceled)
+
+            if (task.IsCanceled)
             {
                 error = "Canclled.";
                 return false;

@@ -92,9 +92,9 @@ namespace Union
                 var index = new List<int>();
                 _outParameters.Add(index);
                 int i = 0;
-                foreach (var Param in _rpcParameters)
+                foreach (var param in _rpcParameters)
                 {
-                    if (tParam.IsSimilarType(Param.Type))
+                    if (tParam.IsSimilarType(param.Type))
                     {
                         matchingParam = true;
                         index.Add(i);
@@ -138,7 +138,7 @@ namespace Union
 
                 var rpcParameter = _rpcParameters[i];
                 var parameterType = rpcParameter.Type;
-                bool isSuit = false;
+                bool isSuit;
                 if (rpcParameter.IsGenericType)
                 {
                     isSuit = parameter.GetTypeInfo().IsGenericType
@@ -184,7 +184,7 @@ namespace Union
                 var parameter = parameters[i];
                 var rpcParameter = _rpcParameters[i];
                 var rpcTypeParameter = rpcParameter.Type;
-                bool isSuit = false;
+                bool isSuit;
                 if (rpcParameter.IsGenericType)
                 {
                     isSuit = parameter.GetTypeInfo().IsGenericType ?

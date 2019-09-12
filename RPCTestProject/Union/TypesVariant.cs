@@ -98,10 +98,10 @@ namespace Union
             return null;
         }
 
-        public static bool WriteObject(object @object, BinaryWriter stream)
+        public static bool WriteObject(object obj, BinaryWriter stream)
         {
             // Если null то записываем только VTYPE_NULL
-            if (@object == null)
+            if (obj == null)
             {
                 stream.Write((byte)EnumVar.VtypeNull);
                 return true;
@@ -109,13 +109,13 @@ namespace Union
 
             // Если это RefParam то сериализуем значение из Value
             // Нужен для возвращения out значения в Value
-            if (@object.GetType() == typeof(RefParam)) return WriteObject(((RefParam)@object).Value, stream);
+            if (obj.GetType() == typeof(RefParam)) return WriteObject(((RefParam)obj).Value, stream);
 
             // Ищем тип в словаре MatchTypes
-            var res = MatchTypes.TryGetValue(@object.GetType(), out var type);
+            var res = MatchTypes.TryGetValue(obj.GetType(), out var type);
 
             // Если тип не поддерживаемый вызываем исключение
-            if (!res) throw new Exception("Неверный тип " + @object.GetType());
+            if (!res) throw new Exception("Неверный тип " + obj.GetType());
 
             // Записываем тип объекта
             stream.Write((byte)type);
@@ -123,28 +123,28 @@ namespace Union
             // В зависимости от типа сериализуем объект
             switch (type)
             {
-                case EnumVar.VtypeI2: stream.Write((Int16)@object); break;
-                case EnumVar.VtypeI4: stream.Write((Int32)@object); break;
-                case EnumVar.VtypeR4: stream.Write((float)@object); break;
-                case EnumVar.VtypeR8: stream.Write((double)@object); break;
-                case EnumVar.VtypeDecimal: stream.Write((decimal)@object); break;
-                case EnumVar.VtypeBool: stream.Write((bool)@object); break;
-                case EnumVar.VtypeI1: stream.Write((sbyte)@object); break;
-                case EnumVar.VtypeUi1: stream.Write((byte)@object); break;
-                case EnumVar.VtypeUi2: stream.Write((UInt16)@object); break;
+                case EnumVar.VtypeI2: stream.Write((Int16)obj); break;
+                case EnumVar.VtypeI4: stream.Write((Int32)obj); break;
+                case EnumVar.VtypeR4: stream.Write((float)obj); break;
+                case EnumVar.VtypeR8: stream.Write((double)obj); break;
+                case EnumVar.VtypeDecimal: stream.Write((decimal)obj); break;
+                case EnumVar.VtypeBool: stream.Write((bool)obj); break;
+                case EnumVar.VtypeI1: stream.Write((sbyte)obj); break;
+                case EnumVar.VtypeUi1: stream.Write((byte)obj); break;
+                case EnumVar.VtypeUi2: stream.Write((UInt16)obj); break;
 
-                case EnumVar.VtypeUi4: stream.Write((UInt32)@object); break;
+                case EnumVar.VtypeUi4: stream.Write((UInt32)obj); break;
 
-                case EnumVar.VtypeI8: stream.Write((Int64)@object); break;
-                case EnumVar.VtypeUi8: stream.Write((UInt64)@object); break;
-                case EnumVar.VtypeChar: stream.Write((char)@object); break;
-                case EnumVar.VtypePwstr: stream.Write((string)@object); break;
+                case EnumVar.VtypeI8: stream.Write((Int64)obj); break;
+                case EnumVar.VtypeUi8: stream.Write((UInt64)obj); break;
+                case EnumVar.VtypeChar: stream.Write((char)obj); break;
+                case EnumVar.VtypePwstr: stream.Write((string)obj); break;
 
-                case EnumVar.VtypeBlob: stream.Write((byte[])@object); break;
-                case EnumVar.VtypeDate: WriteDateTime((DateTime)@object, stream); break;
-                case EnumVar.VtypeGuid: stream.Write(((Guid)@object).ToByteArray()); break;
+                case EnumVar.VtypeBlob: stream.Write((byte[])obj); break;
+                case EnumVar.VtypeDate: WriteDateTime((DateTime)obj, stream); break;
+                case EnumVar.VtypeGuid: stream.Write(((Guid)obj).ToByteArray()); break;
                 case EnumVar.VtypeAutoWrap:
-                    stream.Write(((AutoWrapClient)@object).Target);
+                    stream.Write(((AutoWrapClient)obj).Target);
                     break;
             }
             return true;

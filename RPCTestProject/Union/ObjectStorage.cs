@@ -26,7 +26,7 @@ namespace Union
     {
         private const int DefaultCountObjects = 64;
         private StorageElem[] _elements = new StorageElem[DefaultCountObjects];
-        internal int ElementsCount = 0;
+        internal int ElementsCount;
         private int _arraySize = DefaultCountObjects;
         internal int FirstDeleted = -1;
         private static SpinLock _lockObject = new SpinLock();

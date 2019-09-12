@@ -20,7 +20,7 @@ namespace Union
         CallUnaryOperation,
         IteratorNext,
         DeleteObjects,
-        CloseServer
+        Close
     }
 
     public class AutoWapEnumerator : IEnumerator
@@ -210,7 +210,7 @@ namespace Union
         public override bool TryInvokeMember(InvokeMemberBinder binder, object[] args, out object result)
         {
             result = null;
-            if (Connector.ServerIsClosed) return false;
+            //if (Connector.ServerIsClosed) return false;
 
             string methodName = binder.Name;
             if (methodName == "_new")
@@ -229,7 +229,7 @@ namespace Union
         public override bool TryInvoke(InvokeBinder binder, object[] args, out object result)
         {
             result = null;
-            if (Connector.ServerIsClosed) return false;
+            //if (Connector.ServerIsClosed) return false;
 
             if (args.Length == 1 && ReferenceEquals(args[0], FlagDeleteObject))
             {
@@ -255,7 +255,7 @@ namespace Union
         public override bool TryGetMember(GetMemberBinder binder, out object result)
         {
             result = null;
-            if (Connector.ServerIsClosed) return false;
+            //if (Connector.ServerIsClosed) return false;
 
             var memberName = binder.Name;
 
@@ -278,7 +278,7 @@ namespace Union
 
         public override bool TrySetMember(SetMemberBinder binder, object value)
         {
-            if (Connector.ServerIsClosed) return false;
+            //if (Connector.ServerIsClosed) return false;
 
             var ms = new MemoryStream();
             var bw = new BinaryWriter(ms);
@@ -295,7 +295,7 @@ namespace Union
 
         public override bool TrySetIndex(SetIndexBinder binder, object[] indexes, object value)
         {
-            if (Connector.ServerIsClosed) return false;
+            //if (Connector.ServerIsClosed) return false;
 
             var ms = new MemoryStream();
             var bw = new BinaryWriter(ms);
@@ -319,7 +319,7 @@ namespace Union
             GetIndexBinder binder, object[] indexes, out object result)
         {
             result = null;
-            if (Connector.ServerIsClosed) return false;
+            //if (Connector.ServerIsClosed) return false;
 
             var ms = new MemoryStream();
             var bw = new BinaryWriter(ms);
@@ -431,7 +431,7 @@ namespace Union
 
             connector.AsyncDictionary.Add(guid, tcs);
             bw.Write(guid.ToByteArray());
-            bw.Write(connector.PortForCallBack);
+            bw.Write(connector.Property);
 
             bw.Flush();
 
@@ -453,7 +453,7 @@ namespace Union
         public override bool TryInvokeMember(InvokeMemberBinder binder, object[] args, out object result)
         {
             result = null;
-            if (Connector.ServerIsClosed) return false;
+            //if (Connector.ServerIsClosed) return false;
 
             if (args.Length > 0 && args[0] != null && args[0].GetType() == typeof(object[]))
             {

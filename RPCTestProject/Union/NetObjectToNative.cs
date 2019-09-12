@@ -19,18 +19,18 @@ namespace Union
 
         public static Type GetType(string type) => Type.GetType(type, false);
 
-        public static Type FindTypeForCreateObject(object TypeOrig)
+        public static Type FindTypeForCreateObject(object typeOrig)
         {
-            Type type = TypeOrig as Type;
+            Type type = typeOrig as Type;
 
             if (type != null)
             {
             }
-            else if (TypeOrig is string asString) type = GetType(asString);
+            else if (typeOrig is string asString) type = GetType(asString);
 
             if (type == null)
             {
-                string typeStr = TypeOrig.ToString();
+                string typeStr = typeOrig.ToString();
                 string error = " неверный type " + typeStr;
                 throw new Exception(error);
             }
